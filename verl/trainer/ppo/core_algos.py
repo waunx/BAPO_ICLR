@@ -487,16 +487,12 @@ def compute_grpo_off_policy_advantage(
     token_level_rewards: torch.Tensor,
     response_mask: torch.Tensor,
     index: np.ndarray,
-    off_policy_stats: dict,  # 包含μ_α和σ_α的统计量
+    off_policy_stats: dict = None,  # off policy statistics 'mu' 'sigma' may come from off-policy
     epsilon: float = 1e-6,
     norm_adv_by_std_in_grpo: bool = True,
     config=None,
     **kwargs,
 ):
-    """
-    Off-policy GRPO advantage计算
-    使用历史策略α的统计量计算advantage
-    """
     scores = token_level_rewards.sum(dim=-1)
     
     id2score = defaultdict(list)
@@ -508,7 +504,7 @@ def compute_grpo_off_policy_advantage(
             id2score[index[i]].append(scores[i])
         
         for idx in id2score:
-            # 使用off-policy统计量
+            
             if idx in off_policy_stats:
                 mu_alpha = off_policy_stats[idx]['mu']
                 sigma_alpha = off_policy_stats[idx]['sigma']
@@ -519,7 +515,7 @@ def compute_grpo_off_policy_advantage(
                     else:
                         id2adv[score_idx] = scores[score_idx] - mu_alpha
             else:
-                # 降级到on-policy GRPO
+                # degrade to on-policy GRPO
                 group_scores = torch.tensor(id2score[idx])
                 if len(group_scores) > 1:
                     mu_k = torch.mean(group_scores)
@@ -530,7 +526,6 @@ def compute_grpo_off_policy_advantage(
                         else:
                             id2adv[score_idx] = scores[score_idx] - mu_k
         
-        # 构造advantage tensor
         advantages = torch.zeros_like(scores)
         for idx, adv in id2adv.items():
             advantages[idx] = adv
@@ -539,12 +534,14 @@ def compute_grpo_off_policy_advantage(
 
     return advantages, advantages
 
+
+
 @register_adv_est(AdvantageEstimator.GRPO_ADAPTIVE_FILTER)
 def compute_grpo_adaptive_filter_advantage(
     token_level_rewards: torch.Tensor,
     response_mask: torch.Tensor,
     index: np.ndarray,
-    filtering_mask: torch.Tensor,  # data filtering
+    filtering_mask: torch.Tensor, # filter some bad cases
     off_policy_stats: dict = None,
     epsilon: float = 1e-6,
     norm_adv_by_std_in_grpo: bool = True,
@@ -554,13 +551,11 @@ def compute_grpo_adaptive_filter_advantage(
 
     filtered_indices = torch.where(filtering_mask)[0]
     if len(filtered_indices) == 0:
-        # If no data after filtering, return 0 advantage
         advantages = torch.zeros_like(token_level_rewards)
         return advantages, advantages
     
-    # Calculate advanatge only for filterted data
     filtered_rewards = token_level_rewards[filtered_indices]
-    filtered_mask = response_mask[filtered_indices]
+    filtered_mask = response_mask[filtered_indices] 
     filtered_index = index[filtered_indices]
     
     if off_policy_stats is not None:
@@ -574,7 +569,6 @@ def compute_grpo_adaptive_filter_advantage(
             epsilon, norm_adv_by_std_in_grpo
         )
     
-    # map advantage to original size
     full_advantages = torch.zeros_like(token_level_rewards)
     full_advantages[filtered_indices] = advantages
     

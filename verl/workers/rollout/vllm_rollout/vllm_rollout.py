@@ -203,6 +203,7 @@ class vLLMRollout(BaseRollout):
 
         do_sample = prompts.meta_info.get("do_sample", True)
         is_validate = prompts.meta_info.get("validate", False)
+        is_re_rollout = prompts.meta_info.get("is_re_rollout", False)
         if not do_sample:
             kwargs = {
                 "best_of": 1,
@@ -220,7 +221,11 @@ class vLLMRollout(BaseRollout):
                 "temperature": self.config.val_kwargs.temperature,
                 "n": 1,  # if validate, already repeat in ray_trainer
             }
-
+        elif is_re_rollout:
+            # [wx] For re-evaluate, the 
+            kwargs = {
+                "n": 1,  
+            }
         lora_requests = None
         if self.lora_kwargs:
             # self.inference_engine.llm_engine.list_loras

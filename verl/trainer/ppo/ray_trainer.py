@@ -483,7 +483,7 @@ class OffPolicyManager:
                 
         return sample_data
     
-    def reevaluate_bad_cases_no_repeat(self, batch: DataProto, actor_wg, reward_fn, tokenizer) -> DataProto:
+    def reevaluate_bad_cases(self, batch: DataProto, actor_wg, reward_fn, tokenizer) -> DataProto:
         """Re-evaluate hard prompts using current policy for mu_alpha <= C"""
         if not self.enable_off_policy:
             return batch
@@ -532,7 +532,8 @@ class OffPolicyManager:
             "pad_token_id": tokenizer.pad_token_id,
             "recompute_log_prob": False,
             "do_sample": True,
-            "validate": True, # [wx] using validate mode because the batch is repeated N times after step 2, so we need only inference 1 time for each sample
+            "validate": False, 
+            "is_re_rollout": True,
         }
         
         try:
@@ -560,94 +561,6 @@ class OffPolicyManager:
         
         return batch
     
-    def reevaluate_bad_cases(self, batch: DataProto, actor_wg, reward_fn, tokenizer) -> DataProto:
-        """Re-evaluate hard prompts using current policy for mu_alpha <= C"""
-        if not self.enable_off_policy:
-            return batch
-            
-        rollout_n = self.config.actor_rollout_ref.rollout.n
-        
-        # Get unique uids
-        unique_uids_to_reevaluate = {}  # uid_str -> first_index
-        for i, uid in enumerate(batch.non_tensor_batch["uid"]):
-            uid_str = str(uid)
-            uid_stats = self.buffer.get_uid_stats(uid_str)
-            if uid_stats and uid_stats['mu_alpha'] <= self.current_C:
-                # only save 1 index for each uid
-                if uid_str not in unique_uids_to_reevaluate:
-                    first_idx_for_uid = (i // rollout_n) * rollout_n
-                    unique_uids_to_reevaluate[uid_str] = first_idx_for_uid
-        
-        if not unique_uids_to_reevaluate:
-            return batch
-            
-        print(f"Re-evaluating {len(unique_uids_to_reevaluate)} unique prompts with current policy")
-
-        indices_to_reevaluate = list(unique_uids_to_reevaluate.values())
-        sub_batch = batch.select_idxs(torch.tensor(indices_to_reevaluate))
-        
-        alpha_outputs_to_remove = ["responses", "token_level_scores", "token_level_rewards", 
-                                    "old_log_probs", "ref_log_prob", "rollout_log_probs", "response_mask"]
-        alpha_outputs_to_remove = [k for k in alpha_outputs_to_remove if k in sub_batch.batch] 
-
-
-        _ = sub_batch.pop(batch_keys=alpha_outputs_to_remove, non_tensor_batch_keys=[])
-
-  
-        gen_keys = ["prompts", "input_ids", "attention_mask", "position_ids"]
-        non_tensor_keys = ["raw_prompt_ids"]
-        
-        batch_keys_to_pop = [k for k in gen_keys if k in sub_batch.batch]
-        non_tensor_keys_to_pop = [k for k in non_tensor_keys if k in sub_batch.non_tensor_batch]
-        
-        if not batch_keys_to_pop:
-            return batch
-        
-        sub_gen_batch = sub_batch.pop(
-            batch_keys=batch_keys_to_pop,
-            non_tensor_batch_keys=non_tensor_keys_to_pop
-        )
-        
-        sub_gen_batch.meta_info = {
-            "eos_token_id": tokenizer.eos_token_id,
-            "pad_token_id": tokenizer.pad_token_id,
-            "recompute_log_prob": False,
-            "do_sample": True,
-            "validate": False,  # validate=False mean using rollout mode, it will generate rollout.n responses
-        }
-        
-        try:
-            
-            generated = actor_wg.generate_sequences(sub_gen_batch)
-            
-            sub_batch_repeated = sub_batch.repeat(repeat_times=rollout_n, interleave=True)
-            re_eval_batch = sub_batch_repeated.union(generated)
-            
-            if callable(reward_fn):
-                result = reward_fn(re_eval_batch, return_dict=True)
-                if isinstance(result, dict) and "reward_tensor" in result:
-                    reward_tensor = result["reward_tensor"]
-                else:
-                    reward_tensor = result
-            else:
-                reward_tensor = torch.zeros(len(re_eval_batch))
-            
-            # update current scores (is_alpha=False)
-            scores_current = reward_tensor.sum(-1).cpu().numpy()
-            uid_idx = 0
-            for uid_str in unique_uids_to_reevaluate.keys():
-                for j in range(rollout_n):
-                    self.buffer.add_score(uid_str, scores_current[uid_idx], is_alpha=False)
-                    uid_idx += 1
-            
-            print(f"✓ Updated current scores for {len(unique_uids_to_reevaluate)} prompts "
-                f"({len(scores_current)} total samples)")
-            
-        except Exception as e:
-            print(f"Error in re-evaluation: {e}")
-        
-        return batch
-
     def compute_filtering_mask(self, batch: DataProto) -> torch.Tensor:
 
         if not self.enable_off_policy:

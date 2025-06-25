@@ -3,9 +3,11 @@ set -x
 # If you are using vllm<=0.6.3, you might need to set the following environment variable to avoid bugs:
 # export VLLM_ATTENTION_BACKEND=XFORMERS
 
-MODEL_PATH=/mnt/bn/robotics-rl-lf/vlm_models/Qwen2.5-Math-1.5B
-TRAIN_DATA_PATH=/opt/tiger/e2e_alg/vlm/verl/datas/DeepScaleR-Preview-Dataset/deepscaler_train.parquet
-VAL_DATA_PATH=/opt/tiger/e2e_alg/vlm/verl/datas/DeepScaleR-Preview-Dataset/aime.parquet
+export WANDB_MODE=offline
+
+MODEL_PATH=/data/wx_data/models/Qwen2.5-Math-1.5B
+TRAIN_DATA_PATH=/data/wx_data/datasets/DeepScaleR-Preview-Dataset/deepscaler_train.parquet
+VAL_DATA_PATH=/data/wx_data/datasets/DeepScaleR-Preview-Dataset/aime.parquet
 
 
 python3 -m verl.trainer.main_ppo \
