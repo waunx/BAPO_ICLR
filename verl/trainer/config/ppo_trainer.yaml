@@ -24,7 +24,6 @@ data:
 
   # The field in the dataset where the prompt is located. Default is 'prompt'.
   prompt_key: prompt
-  # prompt
 
   # The field used to select the reward function (if using different ones per example).
   reward_fn_key: data_source
@@ -415,13 +414,13 @@ actor_rollout_ref:
       top_p: 1.0
 
       # Sampling temperature for rollout.
-      temperature: 0
+      temperature: 0.6
 
       # whether to repeat n times for validation
       n: 1
 
       # Whether to sample during training rollout. False uses greedy sampling.
-      do_sample: False
+      do_sample: True
 
     # Multi-turn interaction config for tools or chat.
     multi_turn:
@@ -825,6 +824,15 @@ trainer:
   # Device to run training on (e.g., "cuda", "cpu")
   device: cuda
 
+
+  prompt_tracking:
+
+    enable: True
+    save_dir: "/data/wx_data/offpolicy_GRPO/tracking_res" 
+    track_top_k_improved: 50
+    track_top_k_degraded: 20
+
+  
 # configs related to ray initialization
 ray_init:
 

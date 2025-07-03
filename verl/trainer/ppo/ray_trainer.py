@@ -32,6 +32,8 @@ from typing import Optional, Type
 import time
 import random
 
+import hashlib
+
 import numpy as np
 import ray
 import torch
@@ -39,7 +41,7 @@ from omegaconf import OmegaConf, open_dict
 from torch.utils.data import Dataset, Sampler
 from torchdata.stateful_dataloader import StatefulDataLoader
 from tqdm import tqdm
-from typing import Optional, Type, List
+from typing import Optional, Type, List, Dict
 
 
 from verl import DataProto
@@ -73,17 +75,22 @@ from scipy import stats
 from scipy.optimize import minimize_scalar
 
 
-@dataclass
 class OffPolicyDataSample:
-    uid: str
-    score: float
-    is_alpha: bool
-    sample_data: dict 
-    timestamp: float = None
+    def __init__(self, uid: str, score: float, is_alpha: bool, sample_data: dict):
+        self.uid = uid
+        self.score = score
+        self.is_alpha = is_alpha
+        self.sample_data = sample_data  # For advantage
+        self.timestamp = time.time()
     
-    def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = time.time()
+    def to_dict(self):
+        return {
+            'uid': self.uid,
+            'score': self.score,
+            'is_alpha': self.is_alpha,
+            'sample_data': self.sample_data,
+            'timestamp': self.timestamp
+        }
 
 
 class OffPolicyGroupBuffer:    
@@ -215,8 +222,7 @@ class OffPolicyGroupBuffer:
         self.uid_order.clear()
 
 
-
-class OffPolicyManager:
+class OffPolicyManager_v1:
     def __init__(self, config):
         self.config = config
         self.enable_off_policy = config.algorithm.get("enable_off_policy_grpo", True) 
@@ -229,13 +235,13 @@ class OffPolicyManager:
         self.buffer = OffPolicyGroupBuffer(
             max_samples_per_uid=config.algorithm.get("max_samples_per_uid", 16),
             max_scores_per_uid=config.algorithm.get("max_scores_per_uid", 16),
-            max_total_uids=config.algorithm.get("max_total_uids", 8192)
+            max_total_uids=config.algorithm.get("max_total_uids", 4096)
         )
 
 
         # Alpha policy checkpoint 
         self.alpha_checkpoint_path = None
-        self.temp_dir = config.algorithm.get("temp_dir", "/data/wx_data/verl_tmp") 
+        self.temp_dir = config.algorithm.get("temp_dir", "/data/wx_data/tmp") 
         os.makedirs(self.temp_dir, exist_ok=True)
         
         # C optimazer
@@ -296,10 +302,10 @@ class OffPolicyManager:
             mu_current = stats['mu_current']
             
             # Condition 1: mu_alpha ∈ (C, 1)
-            if current_C < mu_alpha < 1.0:
+            if current_C < mu_alpha < 1.00:
                 return True
             # Condition 2: mu_alpha <= C and mu_current ∈ (C, 1)
-            elif mu_alpha <= current_C and current_C < mu_current < 1.0:
+            elif mu_alpha <= current_C and current_C < mu_current < 1.00:
                 return True
             return False
         
@@ -394,9 +400,13 @@ class OffPolicyManager:
         
         result = {}
         for uid_str, stats in all_stats.items():
+            # result[uid_str] = {
+            #     'mu': stats['mu_current'] if stats['current_count'] > 0 else stats['mu_alpha'],
+            #     'sigma': stats['sigma_current'] if stats['current_count'] > 0 else stats['sigma_alpha']
+            # }
             result[uid_str] = {
-                'mu': stats['mu_current'] if stats['current_count'] > 0 else stats['mu_alpha'],
-                'sigma': stats['sigma_current'] if stats['current_count'] > 0 else stats['sigma_alpha']
+                'mu': stats['mu_alpha'],
+                'sigma': stats['sigma_alpha']
             }
         
         return result
@@ -457,32 +467,6 @@ class OffPolicyManager:
             if os.path.exists(current_temp_path):
                 shutil.rmtree(current_temp_path, ignore_errors=True)
     
-    def _extract_sample_data_for_advantage(self, batch: DataProto, idx: int) -> dict:
-
-        # sample data contains: ['uid', 'token_level_rewards', 'response_mask', 'attention_mask', 'responses', 'old_log_probs'(option), 'values'(option), 'ref_log_prob'(option)]
-        sample_data = {} 
-        
-        tensor_keys = ['prompts', 'position_ids', 'input_ids', 'token_level_scores', 'token_level_rewards', 'response_mask', 'filtering_mask', 'attention_mask', 'responses']
-        if 'values' in batch.batch:
-            tensor_keys.append('values')
-        if 'old_log_probs' in batch.batch:
-            tensor_keys.append('old_log_probs')
-        if 'ref_log_prob' in batch.batch:
-            tensor_keys.append('ref_log_prob')
-        if 'rollout_log_probs' in batch.batch:
-            tensor_keys.append('rollout_log_probs')
-            
-        for key in batch.batch.keys():
-            # if key in batch.batch:
-            sample_data[key] = batch.batch[key][idx].clone().detach()
-        
-        # non_tensor_keys = ['uid']
-        for key in batch.non_tensor_batch.keys():
-            # if key in batch.non_tensor_batch:
-            sample_data[key] = batch.non_tensor_batch[key][idx]
-                
-        return sample_data
-    
     def reevaluate_bad_cases(self, batch: DataProto, actor_wg, reward_fn, tokenizer) -> DataProto:
         """Re-evaluate hard prompts using current policy for mu_alpha <= C"""
         if not self.enable_off_policy:
@@ -506,15 +490,21 @@ class OffPolicyManager:
         sub_batch = batch.select_idxs(torch.tensor(indices_to_reevaluate))
         
         # remove generated keys of alpha batch
-        alpha_outputs_to_remove = ["responses", "token_level_scores", "token_level_rewards", 
+        alpha_outputs_to_remove = ["prompts", "responses", "token_level_scores", "token_level_rewards", 
                                     "old_log_probs", "ref_log_prob", "rollout_log_probs", "response_mask"]
         alpha_outputs_to_remove = [k for k in alpha_outputs_to_remove if k in sub_batch.batch] 
         _ = sub_batch.pop(batch_keys=alpha_outputs_to_remove, non_tensor_batch_keys=[])
 
 
-        gen_keys = ["prompts", "input_ids", "attention_mask", "position_ids"]
+        gen_keys = ["input_ids", "attention_mask", "position_ids"]
         non_tensor_keys = ["raw_prompt_ids"]
         
+        if "multi_modal_data" in sub_batch.non_tensor_batch:
+            non_tensor_keys.append("multi_modal_data")
+        if "raw_prompt" in sub_batch.non_tensor_batch:
+            non_tensor_keys.append("raw_prompt")
+        if "tools_kwargs" in sub_batch.non_tensor_batch:
+            non_tensor_keys.append("tools_kwargs")
         
         batch_keys_to_pop = [k for k in gen_keys if k in sub_batch.batch]
         non_tensor_keys_to_pop = [k for k in non_tensor_keys if k in sub_batch.non_tensor_batch]
@@ -579,10 +569,10 @@ class OffPolicyManager:
             mu_current = uid_stats["mu_current"]
             
             # Condition 1: mu_alpha ∈ (C, 1)
-            if self.current_C < mu_alpha < 1.0:
+            if self.current_C < mu_alpha < 1.00:
                 mask[i] = True
             # Condition 2: mu_alpha <= C and mu_current ∈ (C, 1)
-            elif mu_alpha <= self.current_C and self.current_C < mu_current < 1.0:
+            elif mu_alpha <= self.current_C and self.current_C < mu_current < 1.00:
                 mask[i] = True
         
         return mask
@@ -661,6 +651,570 @@ class OffPolicyManager:
         return metrics
     
 
+class OffPolicyManager:
+    def __init__(self, config):
+        self.config = config
+        self.enable_off_policy = config.algorithm.get("enable_off_policy_grpo", True) 
+        self.alpha_update_freq = config.algorithm.get("off_policy_update_freq", 10)
+        self.max_prompt_length = config.data.get("max_prompt_length", 1024)
+        # 新的准确率区间策略
+        self.target_accuracy_range = (1/8, 4/8)  # 目标学习区间
+        self.buffer_accuracy_range = (0/8, 4/8)  # 缓存数据区间
+        self.promotion_threshold = (4/8, 7/8)    # 提升判断阈值
+        
+        self.step_count = 0
+        
+        self.buffer = OffPolicyGroupBuffer(
+            max_samples_per_uid=config.algorithm.get("max_samples_per_uid", 16),
+            max_scores_per_uid=config.algorithm.get("max_scores_per_uid", 16),
+            max_total_uids=config.algorithm.get("max_total_uids", 8192)
+        )
+
+        # Alpha policy checkpoint 
+        self.alpha_checkpoint_path = None
+        self.temp_dir = config.algorithm.get("temp_dir", "/data/wx_data/verl_tmp") 
+        os.makedirs(self.temp_dir, exist_ok=True)
+        
+        # 记录提升统计
+        self.promotion_stats = {
+            "total_reevaluated": 0,
+            "successful_promotions": 0,
+            "removed_from_buffer": 0
+        }
+
+    def _is_in_target_range(self, score: float) -> bool:
+        """判断分数是否在目标学习区间内 (4/8-7/8)"""
+        return self.target_accuracy_range[0] <= score <= self.target_accuracy_range[1]
+    
+    def _is_in_buffer_range(self, score: float) -> bool:
+        """判断分数是否在缓存区间内 (1/8-3/8)"""
+        return self.buffer_accuracy_range[0] <= score <= self.buffer_accuracy_range[1]
+    
+    def _is_promoted(self, score: float) -> bool:
+        """判断分数是否达到提升阈值 (4/8-7/8)"""
+        return self.promotion_threshold[0] <= score <= self.promotion_threshold[1]
+
+    def collect_data(self, batch, is_alpha_sampling: bool):
+        """收集数据到buffer，基于uid group的平均分数判断是否在1/8-3/8区间"""
+        if not self.enable_off_policy:
+            return
+            
+        scores = batch.batch["token_level_scores"].sum(dim=-1).cpu().numpy()
+        uids = batch.non_tensor_batch["uid"]
+        
+        # 按uid分组计算平均分数
+        uid_to_scores = defaultdict(list)
+        uid_to_indices = defaultdict(list)
+        
+        for i, uid in enumerate(uids):
+            uid_str = str(uid)
+            score = scores[i]
+            uid_to_scores[uid_str].append(score)
+            uid_to_indices[uid_str].append(i)
+        
+        # 对每个uid group判断是否应该加入buffer
+        for uid_str, score_list in uid_to_scores.items():
+            group_mean_score = np.mean(score_list)
+            
+            # 只将平均分数在1/8-3/8区间的group加入buffer
+            if self._is_in_buffer_range(group_mean_score) or self._is_in_target_range(group_mean_score):
+                # 为这个group的所有samples添加到buffer
+                indices = uid_to_indices[uid_str]
+                for idx in indices:
+                    sample_data = self._extract_sample_data(batch, idx)
+                    
+                    sample = OffPolicyDataSample(
+                        uid=uid_str,
+                        score=scores[idx],  # 保存实际的response score
+                        is_alpha=is_alpha_sampling,
+                        sample_data=sample_data
+                    )
+                    
+                    self.buffer.add_sample(uid_str, sample)
+                
+                # print(f"Added group {uid_str[:8]} to buffer: {len(indices)} samples, mean_score={group_mean_score:.3f}")
+            
+            # 同时更新统计信息用于后续判断
+            self.buffer.add_score(uid_str, group_mean_score, is_alpha_sampling)
+
+    def sample_filtered_groups(self, target_groups: int) -> Optional['DataProto']:
+        """从buffer中采样4/8-7/8区间的数据用于训练"""
+        if not self.enable_off_policy:
+            return None
+        
+        def filter_func(stats):
+            mu_alpha = stats['mu_alpha']
+            mu_current = stats['mu_current']
+            
+            # 使用最新的分数进行判断
+            latest_score = mu_current if stats['current_count'] > 0 else mu_alpha
+            
+            # 只选择目标学习区间的数据
+            return self._is_in_target_range(latest_score)
+        
+        sampled_groups = self.buffer.sample_groups_by_filter(filter_func, target_groups)
+        
+        if not sampled_groups:
+            return None
+        
+        all_samples = []
+        for uid_str, samples in sampled_groups.items():
+            all_samples.extend(samples)
+        
+        # print(f"Sampled {len(all_samples)} samples from buffer for training")
+        return self._construct_dataproto_from_samples(all_samples)
+    
+    def get_available_groups_count(self) -> int:
+        """获取buffer中4/8-7/8区间的可用数据数量"""
+        if not self.enable_off_policy:
+            return 0
+        
+        def filter_func(stats):
+            mu_alpha = stats['mu_alpha']
+            mu_current = stats['mu_current']
+            
+            latest_score = mu_current if stats['current_count'] > 0 else mu_alpha
+            return self._is_in_target_range(latest_score)
+        
+        count = 0
+        for uid_str in self.buffer.sample_data.keys():
+            uid_stats = self.buffer.get_uid_stats(uid_str)
+            if uid_stats and filter_func(uid_stats):
+                count += 1
+        
+        return count
+    
+    def reevaluate_and_promote_buffer_samples(self, actor_wg, reward_fn, tokenizer) -> Optional['DataProto']:
+        """重新评估buffer中的样本，如果group平均分数达到4/8-7/8则提升到训练集并从buffer移除"""
+        if not self.enable_off_policy:
+            return None
+        
+        # 获取buffer中的所有样本，按uid分组
+        uid_to_samples = {}
+        uid_to_representative_sample = {}
+        uid_to_original_mean_score = {}
+
+        def filter_func(stats):
+            mu_alpha = stats['mu_alpha']
+            mu_current = stats['mu_current']
+            
+            latest_score = mu_current if stats['current_count'] > 0 else mu_alpha
+            return self._is_in_buffer_range(latest_score)
+        
+        for uid_str, samples in self.buffer.sample_data.items():
+            uid_stats = self.buffer.get_uid_stats(uid_str)
+
+            if samples and uid_stats and filter_func(uid_stats):
+                uid_to_samples[uid_str] = samples
+                # 取最新的一个作为代表用于生成
+                uid_to_representative_sample[uid_str] = samples[0]
+                # 计算该uid在buffer中所有samples的平均分数作为original_score
+                sample_scores = [sample.score for sample in samples]
+                uid_to_original_mean_score[uid_str] = np.mean(sample_scores)
+        
+        if not uid_to_representative_sample:
+            return None
+        
+        print(f"Found {len(uid_to_representative_sample)} groups in buffer for re-evaluation...")
+        
+        # 确保样本数量能被8整除（因为要分到8个GPU上）
+        available_uids = list(uid_to_representative_sample.keys())
+        target_count = (len(available_uids) // actor_wg.world_size) * actor_wg.world_size  
+        
+        if target_count == 0:
+            print(f"Not enough samples for re-evaluation (need at least {actor_wg.world_size})")
+            return None
+        
+        # 如果需要截断，只保留前target_count个
+        if target_count < len(available_uids):
+            selected_uids = available_uids[:target_count]
+            print(f"Truncated from {len(available_uids)} to {target_count} samples to ensure divisibility by {actor_wg.world_size}")
+        else:
+            selected_uids = available_uids
+        
+        # 构建用于重新评估的样本列表 - 每个uid一个代表样本
+        selected_samples = [uid_to_representative_sample[uid] for uid in selected_uids]
+        
+        self.promotion_stats["total_reevaluated"] += len(selected_uids)
+        print(f"Re-evaluating {len(selected_uids)} groups (will generate {len(selected_uids)} * 8 = {len(selected_uids) * 8} responses)...")
+        
+        # 构建重新评估的batch
+        reevaluated_batch = self._construct_dataproto_from_samples_for_re_eval(selected_samples)
+    
+
+        # 移除生成相关的keys，重新生成
+        keys_to_remove = ["prompts", "responses", "token_level_scores", "token_level_rewards", 
+                         "old_log_probs", "ref_log_prob", "rollout_log_probs", "response_mask"]
+        for key in keys_to_remove:
+            if key in reevaluated_batch.batch:
+                reevaluated_batch.batch.pop(key)
+        
+        # 构建生成batch - 每个uid一个样本，但会生成rollout.n=8个responses        
+        gen_keys = ["input_ids", "attention_mask", "position_ids"]
+        non_tensor_keys = ["raw_prompt_ids"]
+        
+        if "multi_modal_data" in reevaluated_batch.non_tensor_batch:
+            non_tensor_keys.append("multi_modal_data")
+        if "raw_prompt" in reevaluated_batch.non_tensor_batch:
+            non_tensor_keys.append("raw_prompt")
+        if "tools_kwargs" in reevaluated_batch.non_tensor_batch:
+            non_tensor_keys.append("tools_kwargs")
+
+        batch_keys_to_pop = [k for k in gen_keys if k in reevaluated_batch.batch]
+        non_tensor_keys_to_pop = [k for k in non_tensor_keys if k in reevaluated_batch.non_tensor_batch]
+        
+        if not batch_keys_to_pop:
+            return None
+        
+        gen_batch = reevaluated_batch.pop(
+            batch_keys=batch_keys_to_pop,
+            non_tensor_batch_keys=non_tensor_keys_to_pop
+        )
+        
+        # 验证gen_batch的大小
+        assert len(gen_batch) == target_count, f"gen_batch size {len(gen_batch)} != target_count {target_count}"
+        assert len(gen_batch) % actor_wg.world_size == 0, f"gen_batch size {len(gen_batch)} is not divisible by actor_wg.world_size {actor_wg.world_size}"
+        
+        gen_batch.meta_info = {
+            "eos_token_id": tokenizer.eos_token_id,
+            "pad_token_id": tokenizer.pad_token_id,
+            "recompute_log_prob": False,
+            "do_sample": True,
+            # "validate": False, 
+        }
+        
+        try:
+            # 使用当前策略重新生成 - 每个prompt会生成rollout.n=8个responses
+            generated = actor_wg.generate_sequences(gen_batch)
+            reevaluated_batch = reevaluated_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.val_kwargs.n, interleave=True)
+            reevaluated_full_batch = reevaluated_batch.union(generated)
+            
+            # 现在reevaluated_full_batch应该有 target_count * 8 个样本
+            expected_total_samples = target_count * self.config.actor_rollout_ref.rollout.val_kwargs.n
+            actual_total_samples = len(reevaluated_full_batch)
+            print(f"Generated {actual_total_samples} responses for {target_count} prompts (expected: {expected_total_samples})")
+            
+            # 计算新的reward
+            if callable(reward_fn):
+                result = reward_fn(reevaluated_full_batch, return_dict=True)
+                if isinstance(result, dict) and "reward_tensor" in result:
+                    reward_tensor = result["reward_tensor"]
+                else:
+                    reward_tensor = result
+            else:
+                reward_tensor = torch.zeros(len(reevaluated_full_batch))
+            
+            reevaluated_full_batch.batch["token_level_scores"] = reward_tensor
+            
+            # 检查哪些groups被提升了 - 需要按group计算平均分数
+            all_scores = reward_tensor.sum(-1).cpu().numpy()
+            promoted_sample_indices = []
+            uids_to_remove = []
+            uids_to_promoted = []
+            
+            # 每个uid对应8个连续的responses（由于rollout.n=8）
+            rollout_n = 8
+            for i, uid_str in enumerate(selected_uids):
+                # 计算该group的8个responses的平均分数
+                start_idx = i * rollout_n
+                end_idx = start_idx + rollout_n
+                group_scores = all_scores[start_idx:end_idx]
+                group_mean_score = np.mean(group_scores)
+                
+                # 获取原始分数用于比较
+                original_score = uid_to_original_mean_score[uid_str]
+                
+                # if self._is_promoted(group_mean_score):
+                if group_mean_score > original_score:
+                    # 这个group被提升了，加入训练集 - 包含该group的所有8个responses
+                    group_indices = list(range(start_idx, end_idx))
+                    promoted_sample_indices.extend(group_indices)
+                    uids_to_promoted.append(uid_str)
+                    if not (self._is_in_buffer_range(group_mean_score) or self._is_in_target_range(group_mean_score)):
+                        uids_to_remove.append(uid_str)
+                    self.promotion_stats["successful_promotions"] += 1
+                    print(f"✓ Group {uid_str[:8]} promoted: {original_score:.3f} -> {group_mean_score:.3f} (8 responses)")
+                else:
+                    # 更新buffer中的分数
+                    self.buffer.add_score(uid_str, group_mean_score, is_alpha=False)
+                    print(f"  Group {uid_str[:8]} not promoted: {original_score:.3f} -> {group_mean_score:.3f}")
+            
+            # 从buffer中移除被提升的groups
+            for uid_str in uids_to_remove:
+                if uid_str in self.buffer.sample_data:
+                    del self.buffer.sample_data[uid_str]
+                if uid_str in self.buffer.alpha_scores:
+                    del self.buffer.alpha_scores[uid_str]
+                if uid_str in self.buffer.current_scores:
+                    del self.buffer.current_scores[uid_str]
+                if uid_str in self.buffer.uid_order:
+                    self.buffer.uid_order.remove(uid_str)
+                self.promotion_stats["removed_from_buffer"] += 1
+            
+            # 返回被提升的样本用于训练
+            if promoted_sample_indices:
+                promoted_indices = torch.tensor(promoted_sample_indices)
+                promoted_batch = reevaluated_full_batch.select_idxs(promoted_indices)
+
+                print(f"🎉 {len(uids_to_promoted)} groups ({len(promoted_sample_indices)} responses) promoted from buffer to training!")
+                return promoted_batch
+            else:
+                print("No groups were promoted from buffer")
+                return None
+                
+        except Exception as e:
+            print(f"Error in buffer re-evaluation: {e}")
+            return None
+
+
+    def compute_filtering_mask(self, batch: DataProto) -> torch.Tensor:
+        """计算过滤mask - 基于uid group的平均分数判断是否在4/8-7/8区间"""
+        if not self.enable_off_policy:
+            return torch.ones(len(batch), dtype=torch.bool)
+        
+        scores = batch.batch["token_level_scores"].sum(dim=-1).cpu().numpy()
+        uids = batch.non_tensor_batch["uid"]
+        mask = torch.zeros(len(batch), dtype=torch.bool)
+        
+        # 按uid分组计算平均分数
+        uid_to_indices = defaultdict(list)
+        uid_to_scores = defaultdict(list)
+        
+        for i, uid in enumerate(uids):
+            uid_str = str(uid)
+            uid_to_indices[uid_str].append(i)
+            uid_to_scores[uid_str].append(scores[i])
+        
+        # 对每个uid group判断是否在目标区间
+        for uid_str, score_list in uid_to_scores.items():
+            group_mean_score = np.mean(score_list)
+            
+            # 如果这个group的平均分数在4/8-7/8区间，则保留所有responses
+            if self._is_in_target_range(group_mean_score):
+                indices = uid_to_indices[uid_str]
+                for idx in indices:
+                    mask[idx] = True
+        
+        return mask
+    
+    def get_metrics(self):
+        """获取策略相关的指标"""
+        if not self.enable_off_policy:
+            return {}
+            
+        buffer_metrics = self.buffer.get_metrics()
+        
+        # 计算各区间的数据分布
+        all_stats = self.buffer.get_all_stats()
+        
+        buffer_range_count = 0
+        target_range_count = 0
+        promoted_range_count = 0
+        
+        for uid_str, stats in all_stats.items():
+            latest_score = stats['mu_current'] if stats['current_count'] > 0 else stats['mu_alpha']
+            
+            if self._is_in_buffer_range(latest_score):
+                buffer_range_count += 1
+            elif self._is_in_target_range(latest_score):
+                target_range_count += 1
+            elif self._is_promoted(latest_score):
+                promoted_range_count += 1
+        
+        promotion_rate = (self.promotion_stats["successful_promotions"] / 
+                         max(self.promotion_stats["total_reevaluated"], 1))
+        
+        metrics = {
+            "off_policy/buffer_range_samples": buffer_range_count,      # 1/8-3/8区间样本数
+            "off_policy/target_range_samples": target_range_count,      # 4/8-7/8区间样本数  
+            "off_policy/promoted_range_samples": promoted_range_count,  # 已提升样本数
+            "off_policy/total_reevaluated": self.promotion_stats["total_reevaluated"],
+            "off_policy/successful_promotions": self.promotion_stats["successful_promotions"],
+            "off_policy/promotion_rate": promotion_rate,
+            "off_policy/buffer_size": buffer_metrics.get('buffer/total_uids', 0),
+        }
+        
+        metrics.update({f"off_policy/{k}": v for k, v in buffer_metrics.items()})
+        
+        return metrics
+
+    # 保持其他方法不变
+    def _extract_sample_data(self, batch, idx: int) -> dict:
+        sample_data = {}
+        
+        for key, tensor in batch.batch.items():
+            sample_data[key] = tensor[idx].clone().detach()
+        
+        for key, values in batch.non_tensor_batch.items():
+            sample_data[key] = values[idx]
+                
+        return sample_data
+    
+    def _construct_dataproto_from_samples(self, samples):
+        if not samples:
+            raise ValueError("No samples provided")
+        
+        tensor_data = {}
+        non_tensor_data = {}
+        
+        tensor_keys = set()
+        non_tensor_keys = set()
+        
+        for sample in samples:
+            for key, value in sample.sample_data.items():
+                
+                if torch.is_tensor(value):
+                    tensor_keys.add(key)
+                else:
+                    non_tensor_keys.add(key)
+        
+        for key in tensor_keys:
+            values = []
+            for sample in samples:
+                if key in sample.sample_data:
+                    if key in ['input_ids', 'position_ids', 'attention_mask']:
+                        values.append(sample.sample_data[key])
+                    else:
+                        values.append(sample.sample_data[key])
+                else:
+                    print(f"Warning: Sample {sample.uid} missing tensor key {key}")
+                    
+            if values:
+                tensor_data[key] = torch.stack(values)
+        
+        for key in non_tensor_keys:
+            values = []
+            for sample in samples:
+                if key in sample.sample_data:
+                    values.append(sample.sample_data[key])
+                else:
+                    values.append(None)  
+            non_tensor_data[key] = np.array(values, dtype=object)
+        
+        dataproto = DataProto.from_dict(
+            tensors=tensor_data,
+            non_tensors=non_tensor_data
+        )
+        
+        return dataproto
+    
+    def _construct_dataproto_from_samples_for_re_eval(self, samples):
+        if not samples:
+            raise ValueError("No samples provided")
+        
+        tensor_data = {}
+        non_tensor_data = {}
+        
+        tensor_keys = set()
+        non_tensor_keys = set()
+        
+        
+        for sample in samples:
+            for key, value in sample.sample_data.items():
+                
+                if torch.is_tensor(value):
+                    tensor_keys.add(key)
+                else:
+                    non_tensor_keys.add(key)
+        
+        for key in tensor_keys:
+            values = []
+            for sample in samples:
+                if key in sample.sample_data:
+                    if key in ['input_ids', 'position_ids', 'attention_mask']:
+                        values.append(sample.sample_data[key][:self.max_prompt_length])
+                    else:
+                        values.append(sample.sample_data[key])
+                else:
+                    print(f"Warning: Sample {sample.uid} missing tensor key {key}")
+                    
+            if values:
+                tensor_data[key] = torch.stack(values)
+        
+        for key in non_tensor_keys:
+            values = []
+            for sample in samples:
+                if key in sample.sample_data:
+                    values.append(sample.sample_data[key])
+                else:
+                    values.append(None)  
+            non_tensor_data[key] = np.array(values, dtype=object)
+        
+        dataproto = DataProto.from_dict(
+            tensors=tensor_data,
+            non_tensors=non_tensor_data
+        )
+        
+        return dataproto
+    
+    def get_off_policy_stats(self) -> Optional[dict]:
+        if not self.enable_off_policy:
+            return None
+        
+        all_stats = self.buffer.get_all_stats()
+        
+        result = {}
+        for uid_str, stats in all_stats.items():
+            result[uid_str] = {
+                'mu': stats['mu_alpha'],
+                'sigma': stats['sigma_alpha']
+            }
+        
+        return result
+    
+    def should_update_alpha_policy(self) -> bool:
+        """whether should update alpha policy or not"""
+        return self.enable_off_policy and (self.step_count % self.alpha_update_freq == 0)
+    
+    def update_alpha_policy(self, actor_wg, global_steps):
+        """update new alpha policy checkpoint from current policy"""
+        try:
+            print(f"[Step {global_steps}] Updating alpha policy...")
+            
+            new_alpha_path = os.path.join(self.temp_dir, f"alpha_step_{global_steps}") 
+            actor_wg.save_checkpoint(
+                local_path=new_alpha_path,
+                hdfs_path=None,
+                global_step=global_steps,
+            )
+            
+            if self.alpha_checkpoint_path and os.path.exists(self.alpha_checkpoint_path):
+                # remove old alpha policy
+                shutil.rmtree(self.alpha_checkpoint_path, ignore_errors=True)
+            
+            self.alpha_checkpoint_path = new_alpha_path
+            print(f"✓ Alpha policy checkpoint saved to: {new_alpha_path}")
+            
+        except Exception as e:
+            print(f"Error updating alpha policy: {e}")
+    
+    def sample_with_alpha_policy(self, gen_batch, actor_wg):
+        """Sampling using alpha policy"""
+        if not self.alpha_checkpoint_path or not os.path.exists(self.alpha_checkpoint_path):
+            print("No alpha checkpoint, using current policy")
+            return actor_wg.generate_sequences(gen_batch), False
+        
+        current_temp_path = os.path.join(self.temp_dir, f"current_{os.getpid()}")
+        try:
+            actor_wg.save_checkpoint(current_temp_path, None, 0) 
+            actor_wg.load_checkpoint(self.alpha_checkpoint_path, del_local_after_load=False)
+            result = actor_wg.generate_sequences(gen_batch)
+            actor_wg.load_checkpoint(current_temp_path, del_local_after_load=False)
+            
+            return result, True
+            
+        except Exception as e:
+            print(f"Error in alpha sampling: {e}")
+            try:
+                actor_wg.load_checkpoint(current_temp_path, del_local_after_load=False)
+            except:
+                pass
+            return actor_wg.generate_sequences(gen_batch), False
+        finally:
+            if os.path.exists(current_temp_path):
+                shutil.rmtree(current_temp_path, ignore_errors=True)
+
+
 class OnlineCOptimizer:
     """minimize (p1*K1 + p2*K2)/(p1+p2)"""
     
@@ -723,10 +1277,10 @@ class OnlineCOptimizer:
                 continue
                 
             # X1: mu_alpha ∈ (C, 1)
-            if current_C < mu_alpha < 1.0:
+            if current_C < mu_alpha < 1.00:
                 self.p1_count += 1
             # X2: mu_alpha <= C and mu_current ∈ (C, 1)
-            elif mu_alpha <= current_C and current_C < mu_current < 1.0:
+            elif mu_alpha <= current_C and current_C < mu_current < 1.00:
                 self.p2_count += 1
         
         if total_samples == 0:
@@ -802,22 +1356,280 @@ class OnlineCOptimizer:
         return metrics
     
 
-class OffPolicyDataSample:
-    def __init__(self, uid: str, score: float, is_alpha: bool, sample_data: dict):
-        self.uid = uid
-        self.score = score
-        self.is_alpha = is_alpha
-        self.sample_data = sample_data  # For advantage
-        self.timestamp = time.time()
+class PromptAccuracyTracker:
+    """
+    Tracks accuracy changes for individual prompts during RL training.
+    Records baseline accuracy and monitors improvement over training steps.
+    """
     
-    def to_dict(self):
-        return {
-            'uid': self.uid,
-            'score': self.score,
-            'is_alpha': self.is_alpha,
-            'sample_data': self.sample_data,
-            'timestamp': self.timestamp
+    def __init__(self, 
+                 save_dir: str = "./prompt_tracking",
+                 track_top_k_improved: int = 50,
+                 track_top_k_degraded: int = 20):
+        """
+        Args:
+            save_dir: Directory to save tracking results
+            track_top_k_improved: Number of most improved prompts to track
+            track_top_k_degraded: Number of most degraded prompts to track
+        """
+        self.save_dir = save_dir
+        self.track_top_k_improved = track_top_k_improved
+        self.track_top_k_degraded = track_top_k_degraded
+        
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Storage for prompt data
+        self.prompt_data = {}  # {prompt_hash: {"content": str, "baseline_acc": float, "history": [(step, acc), ...]}}
+        self.baseline_recorded = False
+        
+    def _hash_prompt(self, prompt: str) -> str:
+        """Create a consistent hash for prompt identification"""
+        return hashlib.md5(prompt.encode('utf-8')).hexdigest()[:16]
+    
+    def record_baseline(self, prompts: List[str], accuracies: List[float], step: int = 0):
+        """
+        Record baseline accuracy for each prompt at the beginning of training.
+        
+        Args:
+            prompts: List of prompt texts
+            accuracies: List of corresponding accuracies
+            step: Training step (usually 0 for baseline)
+        """
+        if self.baseline_recorded:
+            print("Warning: Baseline already recorded. Skipping...")
+            return
+            
+        print(f"Recording baseline accuracy for {len(prompts)} prompts at step {step}")
+        
+        for prompt, acc in zip(prompts, accuracies):
+            prompt_hash = self._hash_prompt(prompt)
+            self.prompt_data[prompt_hash] = {
+                "content": prompt,
+                "baseline_acc": acc,
+                "history": [(step, acc)]
+            }
+        
+        self.baseline_recorded = True
+        self._save_baseline()
+        print(f"✓ Baseline recorded for {len(self.prompt_data)} unique prompts")
+    
+    def update_accuracies(self, prompts: List[str], accuracies: List[float], step: int):
+        """
+        Update accuracy for prompts at current training step.
+        
+        Args:
+            prompts: List of prompt texts  
+            accuracies: List of corresponding accuracies
+            step: Current training step
+        """
+        if not self.baseline_recorded:
+            print("Warning: No baseline recorded yet. Call record_baseline() first.")
+            return
+            
+        updated_count = 0
+        new_prompts = 0
+        
+        for prompt, acc in zip(prompts, accuracies):
+            prompt_hash = self._hash_prompt(prompt)
+            
+            if prompt_hash in self.prompt_data:
+                self.prompt_data[prompt_hash]["history"].append((step, acc))
+                updated_count += 1
+            else:
+                # New prompt not in baseline (shouldn't happen with fixed eval set)
+                print(f"Warning: New prompt found at step {step}: {prompt[:50]}...")
+                new_prompts += 1
+        
+        print(f"Updated accuracy for {updated_count} prompts at step {step}")
+        if new_prompts > 0:
+            print(f"Warning: {new_prompts} new prompts not in baseline")
+            
+        # Save tracking results periodically
+        self._save_tracking_results(step)
+    
+    def get_improvement_stats(self, step: int) -> Dict:
+        """
+        Calculate improvement statistics for current step.
+        
+        Args:
+            step: Current training step
+            
+        Returns:
+            Dictionary with improvement statistics
+        """
+        if not self.baseline_recorded:
+            return {}
+            
+        improvements = []
+        degradations = []
+        
+        for prompt_hash, data in self.prompt_data.items():
+            if len(data["history"]) < 2:
+                continue
+                
+            baseline_acc = data["baseline_acc"]
+            current_acc = data["history"][-1][1]  # Latest accuracy
+            improvement = current_acc - baseline_acc
+            
+            if improvement > 0:
+                improvements.append({
+                    "prompt_hash": prompt_hash,
+                    "content": data["content"][:100] + "..." if len(data["content"]) > 100 else data["content"],
+                    "baseline_acc": baseline_acc,
+                    "current_acc": current_acc,
+                    "improvement": improvement
+                })
+            elif improvement < 0:
+                degradations.append({
+                    "prompt_hash": prompt_hash,
+                    "content": data["content"][:100] + "..." if len(data["content"]) > 100 else data["content"],
+                    "baseline_acc": baseline_acc,
+                    "current_acc": current_acc,
+                    "degradation": abs(improvement)
+                })
+        
+        # Sort by improvement/degradation magnitude
+        improvements.sort(key=lambda x: x["improvement"], reverse=True)
+        degradations.sort(key=lambda x: x["degradation"], reverse=True)
+        
+        total_prompts = len(self.prompt_data)
+        improved_prompts = len(improvements)
+        degraded_prompts = len(degradations)
+        unchanged_prompts = total_prompts - improved_prompts - degraded_prompts
+        
+        stats = {
+            "step": step,
+            "total_prompts": total_prompts,
+            "improved_prompts": improved_prompts,
+            "degraded_prompts": degraded_prompts,
+            "unchanged_prompts": unchanged_prompts,
+            "improvement_rate": improved_prompts / total_prompts if total_prompts > 0 else 0,
+            "degradation_rate": degraded_prompts / total_prompts if total_prompts > 0 else 0,
+            "top_improved": improvements[:self.track_top_k_improved],
+            "top_degraded": degradations[:self.track_top_k_degraded],
         }
+        
+        if improvements:
+            stats["avg_improvement"] = np.mean([x["improvement"] for x in improvements])
+            stats["max_improvement"] = improvements[0]["improvement"]
+        
+        if degradations:
+            stats["avg_degradation"] = np.mean([x["degradation"] for x in degradations])
+            stats["max_degradation"] = degradations[0]["degradation"]
+            
+        return stats
+    
+    def _save_baseline(self):
+        """Save baseline data to file"""
+        baseline_file = os.path.join(self.save_dir, "baseline.json")
+        baseline_data = {
+            "prompts": len(self.prompt_data),
+            "data": {k: {"content": v["content"], "baseline_acc": v["baseline_acc"]} 
+                    for k, v in self.prompt_data.items()}
+        }
+        
+        with open(baseline_file, "w", encoding="utf-8") as f:
+            json.dump(baseline_data, f, ensure_ascii=False, indent=2)
+        
+        print(f"Baseline saved to {baseline_file}")
+    
+    def _save_tracking_results(self, step: int):
+        """Save current tracking results"""
+        tracking_file = os.path.join(self.save_dir, f"tracking_step_{step}.json")
+        
+        # Get improvement stats
+        stats = self.get_improvement_stats(step)
+        
+        # Full history data
+        history_data = {
+            "step": step,
+            "stats": stats,
+            "full_history": {k: v["history"] for k, v in self.prompt_data.items()}
+        }
+        
+        with open(tracking_file, "w", encoding="utf-8") as f:
+            json.dump(history_data, f, ensure_ascii=False, indent=2)
+        
+        # Also save a summary
+        summary_file = os.path.join(self.save_dir, "latest_summary.json")
+        summary = {
+            "last_updated_step": step,
+            "total_prompts": stats.get("total_prompts", 0),
+            "improvement_rate": stats.get("improvement_rate", 0),
+            "degradation_rate": stats.get("degradation_rate", 0),
+            "top_5_improved": stats.get("top_improved", [])[:5],
+            "top_5_degraded": stats.get("top_degraded", [])[:5]
+        }
+        
+        with open(summary_file, "w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, indent=2)
+    
+    def get_metrics_for_logging(self, step: int) -> Dict[str, float]:
+        """
+        Get metrics suitable for logging to wandb/tensorboard.
+        
+        Args:
+            step: Current training step
+            
+        Returns:
+            Dictionary of metrics with proper naming for logging
+        """
+        stats = self.get_improvement_stats(step)
+        
+        metrics = {
+            "prompt_tracking/total_prompts": stats.get("total_prompts", 0),
+            "prompt_tracking/improved_prompts": stats.get("improved_prompts", 0),
+            "prompt_tracking/degraded_prompts": stats.get("degraded_prompts", 0),
+            "prompt_tracking/improvement_rate": stats.get("improvement_rate", 0),
+            "prompt_tracking/degradation_rate": stats.get("degradation_rate", 0),
+        }
+        
+        if "avg_improvement" in stats:
+            metrics["prompt_tracking/avg_improvement"] = stats["avg_improvement"]
+        if "max_improvement" in stats:
+            metrics["prompt_tracking/max_improvement"] = stats["max_improvement"]
+        if "avg_degradation" in stats:
+            metrics["prompt_tracking/avg_degradation"] = stats["avg_degradation"]
+        if "max_degradation" in stats:
+            metrics["prompt_tracking/max_degradation"] = stats["max_degradation"]
+            
+        return metrics
+    
+    def load_from_checkpoint(self, checkpoint_dir: str) -> bool:
+        """
+        Load tracking data from checkpoint.
+        
+        Args:
+            checkpoint_dir: Directory containing saved tracking data
+            
+        Returns:
+            True if loaded successfully, False otherwise
+        """
+        baseline_file = os.path.join(checkpoint_dir, "baseline.json")
+        
+        if not os.path.exists(baseline_file):
+            print(f"No baseline file found at {baseline_file}")
+            return False
+            
+        try:
+            with open(baseline_file, "r", encoding="utf-8") as f:
+                baseline_data = json.load(f)
+            
+            # Reconstruct prompt_data
+            for prompt_hash, data in baseline_data["data"].items():
+                self.prompt_data[prompt_hash] = {
+                    "content": data["content"],
+                    "baseline_acc": data["baseline_acc"],
+                    "history": [(0, data["baseline_acc"])]  # Start with baseline
+                }
+            
+            self.baseline_recorded = True
+            print(f"✓ Loaded tracking data for {len(self.prompt_data)} prompts")
+            return True
+            
+        except Exception as e:
+            print(f"Error loading tracking data: {e}")
+            return False
 
 
 class Role(Enum):
@@ -1129,7 +1941,28 @@ class RayPPOTrainer:
 
         self._validate_config()
         self._create_dataloader(train_dataset, val_dataset, collate_fn, train_sampler)
+        self._init_prompt_tracker()
 
+
+    def _init_prompt_tracker(self):
+        """Initialize prompt accuracy tracker"""
+        tracker_config = self.config.trainer.get("prompt_tracking", {})
+        
+        if not tracker_config.get("enable", False):
+            self.prompt_tracker = None
+            return
+            
+        save_dir = tracker_config.get("save_dir", "./prompt_tracking_results")
+        track_improved = tracker_config.get("track_top_k_improved", 50)
+        track_degraded = tracker_config.get("track_top_k_degraded", 20)
+        
+        self.prompt_tracker = PromptAccuracyTracker(
+            save_dir=save_dir,
+            track_top_k_improved=track_improved,
+            track_top_k_degraded=track_degraded
+        )
+        
+        print("✓ Prompt accuracy tracker initialized")
 
     def _create_temp_subdir(self, prefix="temp"):
         """在alpha_temp_dir下创建子目录"""
@@ -1377,6 +2210,7 @@ class RayPPOTrainer:
         self.validation_generations_logger.log(self.config.trainer.logger, samples, self.global_steps)
 
     def _validate(self):
+        """Enhanced validation that includes prompt tracking"""
         data_source_lst = []
         reward_extra_infos_dict: dict[str, list] = defaultdict(list)
 
@@ -1384,19 +2218,23 @@ class RayPPOTrainer:
         sample_inputs = []
         sample_outputs = []
         sample_scores = []
+        
+        # For prompt tracking
+        prompt_accuracies = []
+        prompt_texts = []
 
         for test_data in self.val_dataloader:
             test_batch = DataProto.from_single_dict(test_data)
 
             # repeat test batch
-            test_batch = test_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.val_kwargs.n, interleave=True)
+            test_input_batch = test_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.val_kwargs.n, interleave=True)
 
             # we only do validation on rule-based rm
             if self.config.reward_model.enable and test_batch[0].non_tensor_batch["reward_model"]["style"] == "model":
                 return {}
 
             # Store original inputs
-            input_ids = test_batch.batch["input_ids"]
+            input_ids = test_input_batch.batch["input_ids"]
             # TODO: Can we keep special tokens except for padding tokens?
             input_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in input_ids]
             sample_inputs.extend(input_texts)
@@ -1414,17 +2252,24 @@ class RayPPOTrainer:
                 non_tensor_batch_keys=non_tensor_batch_keys_to_pop,
             )
 
+            test_input_batch.pop(
+                batch_keys=batch_keys_to_pop,
+                non_tensor_batch_keys=non_tensor_batch_keys_to_pop,
+            )
+
             test_gen_batch.meta_info = {
                 "eos_token_id": self.tokenizer.eos_token_id,
                 "pad_token_id": self.tokenizer.pad_token_id,
                 "recompute_log_prob": False,
-                "do_sample": self.config.actor_rollout_ref.rollout.val_kwargs.do_sample,
-                "validate": True,
+                "do_sample": True,
+                # "validate": True,
             }
             print(f"test_gen_batch meta info: {test_gen_batch.meta_info}")
 
             # pad to be divisible by dp_size
             test_gen_batch_padded, pad_size = pad_dataproto_to_divisor(test_gen_batch, self.actor_rollout_wg.world_size)
+            # print("self.actor_rollout_wg.world_size", self.actor_rollout_wg.world_size)
+            
             if not self.async_rollout_mode:
                 test_output_gen_batch_padded = self.actor_rollout_wg.generate_sequences(test_gen_batch_padded)
             else:
@@ -1441,7 +2286,8 @@ class RayPPOTrainer:
             output_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in output_ids]
             sample_outputs.extend(output_texts)
 
-            test_batch = test_batch.union(test_output_gen_batch)
+
+            test_batch = test_input_batch.union(test_output_gen_batch)
 
             # evaluate using reward_function
             result = self.val_reward_fn(test_batch, return_dict=True)
@@ -1449,12 +2295,34 @@ class RayPPOTrainer:
             scores = reward_tensor.sum(-1).cpu().tolist()
             sample_scores.extend(scores)
 
+            # For prompt tracking: calculate per-prompt accuracy (average over n responses per prompt)
+            if self.prompt_tracker is not None:
+                n_responses = self.config.actor_rollout_ref.rollout.val_kwargs.n
+                prompt_batch_size = len(input_texts) // n_responses
+                print("prompt_batch_size", prompt_batch_size)
+                for i in range(prompt_batch_size):
+                    start_idx = i * n_responses
+                    end_idx = (i + 1) * n_responses
+                    prompt_text = input_texts[start_idx]  # All responses for this prompt have same input
+                    prompt_scores = scores[start_idx:end_idx]
+                    prompt_accuracy = np.mean(prompt_scores)  # Average accuracy across responses
+                    
+                    prompt_texts.append(prompt_text)
+                    prompt_accuracies.append(prompt_accuracy)
+
             reward_extra_infos_dict["reward"].extend(scores)
             if "reward_extra_info" in result:
                 for key, lst in result["reward_extra_info"].items():
                     reward_extra_infos_dict[key].extend(lst)
 
             data_source_lst.append(test_batch.non_tensor_batch.get("data_source", ["unknown"] * reward_tensor.shape[0]))
+
+        # Update prompt tracker
+        if self.prompt_tracker is not None:
+            if self.global_steps == 0:  # Record baseline
+                self.prompt_tracker.record_baseline(prompt_texts, prompt_accuracies, self.global_steps)
+            else:  # Update accuracies
+                self.prompt_tracker.update_accuracies(prompt_texts, prompt_accuracies, self.global_steps)
 
         self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores)
 
@@ -1487,6 +2355,29 @@ class RayPPOTrainer:
                         metric_sec = "val-aux"
                     pfx = f"{metric_sec}/{data_source}/{var_name}/{metric_name}"
                     metric_dict[pfx] = metric_val
+
+        # Add prompt tracking metrics if available
+        if self.prompt_tracker is not None and self.global_steps > 0:
+            tracking_metrics = self.prompt_tracker.get_metrics_for_logging(self.global_steps)
+            metric_dict.update(tracking_metrics)
+            
+            # Print improvement summary
+            stats = self.prompt_tracker.get_improvement_stats(self.global_steps)
+            print(f"\n=== Prompt Tracking Summary (Step {self.global_steps}) ===")
+            print(f"Total prompts: {stats.get('total_prompts', 0)}")
+            print(f"Improved: {stats.get('improved_prompts', 0)} ({stats.get('improvement_rate', 0):.2%})")
+            print(f"Degraded: {stats.get('degraded_prompts', 0)} ({stats.get('degradation_rate', 0):.2%})")
+            
+            if stats.get('top_improved'):
+                print(f"\nTop improved prompts:")
+                for i, item in enumerate(stats['top_improved'][:3], 1):
+                    print(f"  {i}. +{item['improvement']:.3f}: {item['content'][:60]}...")
+                    
+            if stats.get('top_degraded'):
+                print(f"\nTop degraded prompts:")
+                for i, item in enumerate(stats['top_degraded'][:3], 1):
+                    print(f"  {i}. -{item['degradation']:.3f}: {item['content'][:60]}...")
+            print("=" * 50)
 
         return metric_dict
 
@@ -1613,6 +2504,24 @@ class RayPPOTrainer:
         with open(local_latest_checkpointed_iteration, "w") as f:
             f.write(str(self.global_steps))
 
+        
+        # Save prompt tracking data if available
+        if self.prompt_tracker is not None:
+            tracking_dir = os.path.join(local_global_step_folder, "prompt_tracking") 
+            os.makedirs(tracking_dir, exist_ok=True)
+            
+            # Copy current tracking files to checkpoint
+            import shutil
+            src_dir = self.prompt_tracker.save_dir
+            if os.path.exists(src_dir):
+                for filename in os.listdir(src_dir):
+                    if filename.endswith('.json'):
+                        src_file = os.path.join(src_dir, filename)
+                        dst_file = os.path.join(tracking_dir, filename)
+                        shutil.copy2(src_file, dst_file)
+                print(f"✓ Saved prompt tracking data to {tracking_dir}")
+
+
     def _load_checkpoint(self):
         if self.config.trainer.resume_mode == "disable":
             return 0
@@ -1664,6 +2573,15 @@ class RayPPOTrainer:
         else:
             print(f"Warning: No dataloader state found at {dataloader_local_path}, will start from scratch")
 
+        if self.prompt_tracker is not None and global_step_folder is not None:
+            tracking_dir = os.path.join(global_step_folder, "prompt_tracking")
+            if os.path.exists(tracking_dir):
+                success = self.prompt_tracker.load_from_checkpoint(tracking_dir)
+                if success:
+                    print(f"✓ Loaded prompt tracking data from {tracking_dir}")
+                else:
+                    print(f"⚠ Failed to load prompt tracking data from {tracking_dir}")
+
     def _balance_batch(self, batch: DataProto, metrics, logging_prefix="global_seqlen"):
         """Reorder the data on single controller such that each dp rank gets similar total tokens"""
         attention_mask = batch.batch["attention_mask"]
@@ -1678,7 +2596,7 @@ class RayPPOTrainer:
         metrics.update(global_balance_stats)
 
 
-    def fit(self):
+    def fit_v1(self):
         """
         The training loop of PPO.
         The driver process only need to call the compute functions of the worker group through RPC
@@ -2073,6 +2991,478 @@ class RayPPOTrainer:
                     pprint(f"Final validation metrics: {last_val_metrics}")
                     progress_bar.close()
                     return
+
+
+    def fit(self):
+        """
+        The training loop of PPO.
+        The driver process only need to call the compute functions of the worker group through RPC
+        to construct the PPO dataflow.
+        The light-weight advantage computation is done on the driver process.
+        """
+        from omegaconf import OmegaConf
+
+        from verl.utils.tracking import Tracking
+
+        logger = Tracking(
+            project_name=self.config.trainer.project_name,
+            experiment_name=self.config.trainer.experiment_name,
+            default_backend=self.config.trainer.logger,
+            config=OmegaConf.to_container(self.config, resolve=True),
+        )
+
+        self.global_steps = 0
+
+        # load checkpoint before doing anything
+        self._load_checkpoint()
+
+        # perform validation before training
+        # currently, we only support validation using the reward_function.
+        if self.val_reward_fn is not None and self.config.trainer.get("val_before_train", True):
+            val_metrics = self._validate()
+            assert val_metrics, f"{val_metrics=}"
+            pprint(f"Initial validation metrics: {val_metrics}")
+            logger.log(data=val_metrics, step=self.global_steps)
+            if self.config.trainer.get("val_only", False):
+                return
+
+        # add tqdm
+        progress_bar = tqdm(total=self.total_training_steps, initial=self.global_steps, desc="Training Progress")
+
+        # we start from step 1
+        self.global_steps += 1
+        last_val_metrics = None
+
+        for epoch in range(self.config.trainer.total_epochs):
+            for batch_dict in self.train_dataloader:
+                metrics = {}
+                timing_raw = {}
+                batch: DataProto = DataProto.from_single_dict(batch_dict)
+
+                # pop those keys for generation
+                batch_keys_to_pop = ["input_ids", "attention_mask", "position_ids"]
+                non_tensor_batch_keys_to_pop = ["raw_prompt_ids"]
+                if "multi_modal_data" in batch.non_tensor_batch:
+                    non_tensor_batch_keys_to_pop.append("multi_modal_data")
+                if "raw_prompt" in batch.non_tensor_batch:
+                    non_tensor_batch_keys_to_pop.append("raw_prompt")
+                if "tools_kwargs" in batch.non_tensor_batch:
+                    non_tensor_batch_keys_to_pop.append("tools_kwargs")
+
+                # [wx] pop() means that batch will remove these keys and the poped keys will save as gen_batch
+                gen_batch = batch.pop(
+                    batch_keys=batch_keys_to_pop,
+                    non_tensor_batch_keys=non_tensor_batch_keys_to_pop,
+                )
+
+                is_last_step = self.global_steps >= self.total_training_steps
+
+                with _timer("step", timing_raw):
+
+                    # [wx] Step 1: Check and update alpha policy for setting off-policy sampling 
+                    should_update_alpha = self.off_policy_manager.should_update_alpha_policy()
+                    if should_update_alpha:
+                        with _timer("update_alpha_policy", timing_raw):
+                            self.off_policy_manager.update_alpha_policy(self.actor_rollout_wg, self.global_steps)
+
+                    # [wx] Step 2: Generate batch using alpha policy
+                    with _timer("gen", timing_raw):
+                        
+                        if self.off_policy_manager.enable_off_policy:
+                            gen_batch_output, is_alpha_sampling = self.off_policy_manager.sample_with_alpha_policy(
+                                gen_batch, self.actor_rollout_wg
+                            )
+                        else:
+                            gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)
+                            is_alpha_sampling = False
+                        
+                        timing_raw.update(gen_batch_output.meta_info["timing"])
+                        gen_batch_output.meta_info.pop("timing", None)
+
+
+                    if self.config.algorithm.adv_estimator == AdvantageEstimator.REMAX:
+                        with _timer("gen_max", timing_raw):
+                            gen_baseline_batch = deepcopy(gen_batch)
+                            gen_baseline_batch.meta_info["do_sample"] = False
+                            gen_baseline_output = self.actor_rollout_wg.generate_sequences(gen_baseline_batch)
+
+                            batch = batch.union(gen_baseline_output)
+                            reward_baseline_tensor = self.reward_fn(batch)
+                            reward_baseline_tensor = reward_baseline_tensor.sum(dim=-1)
+
+                            batch.pop(batch_keys=list(gen_baseline_output.batch.keys()))
+
+                            batch.batch["reward_baselines"] = reward_baseline_tensor
+
+                            del gen_baseline_batch, gen_baseline_output
+                    
+                    # TODO: This encode mode make uid unique for each training steps, need to modify
+                    batch.non_tensor_batch["uid"] = np.array([str(uuid.uuid4()) for _ in range(len(batch.batch))], dtype=object)
+                    # repeat to align with repeated responses in rollout
+
+                    batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
+                    # [wx] union() means combine gen_batch infos and output infos into batch
+                    batch = batch.union(gen_batch_output)
+
+                    batch.batch["response_mask"] = compute_response_mask(batch)
+                    # Balance the number of valid tokens across DP ranks.
+                    # NOTE: This usually changes the order of data in the `batch`,
+                    # which won't affect the advantage calculation (since it's based on uid),
+                    # but might affect the loss calculation (due to the change of mini-batching).
+                    # TODO: Decouple the DP balancing and mini-batching.
+                    if self.config.trainer.balance_batch:
+                        self._balance_batch(batch, metrics=metrics)
+
+                    # compute global_valid tokens
+                    batch.meta_info["global_token_num"] = torch.sum(batch.batch["attention_mask"], dim=-1).tolist()
+
+
+                    # [wx] Step 3: Calculate batch rewards
+                    with _timer("reward", timing_raw):
+                        # compute reward model score
+                        if self.use_rm:
+                            reward_tensor = self.rm_wg.compute_rm_score(batch)
+                            batch = batch.union(reward_tensor)
+
+                        if self.config.reward_model.launch_reward_fn_async:
+                            future_reward = compute_reward_async.remote(batch, self.config, self.tokenizer)
+                        else:
+                            reward_tensor, reward_extra_infos_dict = compute_reward(batch, self.reward_fn)
+                        # we combine with rule-based rm
+                        reward_extra_infos_dict: dict[str, list]
+                        if self.config.reward_model.launch_reward_fn_async:
+                            reward_tensor, reward_extra_infos_dict = ray.get(future_reward)
+                        batch.batch["token_level_scores"] = reward_tensor
+
+
+                    # [wx] Step 4: Only collect specifial range data  ([1/8-3/8])
+
+                    # self.off_policy_manager.collect_data(batch, is_alpha_sampling)
+                    scores = batch.batch["token_level_scores"].sum(dim=-1).cpu().numpy()
+                    uids = batch.non_tensor_batch["uid"]
+                    for i, uid in enumerate(uids):
+                        uid_str = str(uid)
+                        score = scores[i]
+                        # [wx] buffer have two main parts: the one is the stats buffer (dictlist)
+                        # For each uid (key), the value is the scores from alpha/current policy generation.
+                        self.off_policy_manager.buffer.add_score(uid_str, score, is_alpha_sampling)
+
+
+                    # [wx] Step 5: Re-evaluate bad cases using current policy
+
+                    promoted_batch = None
+                    if self.off_policy_manager.enable_off_policy:
+                        
+                        if self.global_steps % 1 == 0: 
+                            promoted_batch = self.off_policy_manager.reevaluate_and_promote_buffer_samples(
+                                self.actor_rollout_wg, self.reward_fn, self.tokenizer
+                            )
+                            if promoted_batch is not None:
+                                promoted_batch.batch["response_mask"] = compute_response_mask(promoted_batch)
+                                
+                    # [wx] Step 6: Calculate masks ([4/8-7/8])
+                    filtering_mask = self.off_policy_manager.compute_filtering_mask(batch)
+                    batch.batch["filtering_mask"] = filtering_mask
+
+                    # recompute old_log_probs
+                    with _timer("old_log_prob", timing_raw):
+                        # [wx] for off policy GRPO, batch is sampled from alpha policy and generate [rollout_log_prob], so we can use it as [old_log_prob]
+                        old_log_prob = self.actor_rollout_wg.compute_log_prob(batch) 
+                        entropys = old_log_prob.batch["entropys"]
+                        response_masks = batch.batch["response_mask"]
+                        loss_agg_mode = self.config.actor_rollout_ref.actor.loss_agg_mode
+                        entropy_loss = agg_loss(loss_mat=entropys, loss_mask=response_masks, loss_agg_mode=loss_agg_mode)
+                        old_log_prob_metrics = {"actor/entropy_loss": entropy_loss.detach().item()}
+                        metrics.update(old_log_prob_metrics)
+                        old_log_prob.batch.pop("entropys")
+                        batch = batch.union(old_log_prob)
+                        
+                        # if self.off_policy_manager.enable_off_policy and "rollout_log_probs" in batch.batch.keys():
+                        #     batch.batch["old_log_probs"] = batch.batch["rollout_log_probs"]
+                        
+                        # else:
+                        # TODO: we may want to add diff of probs too.
+                        rollout_old_log_probs = batch.batch["rollout_log_probs"]
+                        actor_old_log_probs = batch.batch["old_log_probs"]
+                        attention_mask = batch.batch["attention_mask"]
+                        responses = batch.batch["responses"]
+                        response_length = responses.size(1)
+                        response_mask = attention_mask[:, -response_length:]
+
+                        rollout_probs = torch.exp(rollout_old_log_probs)
+                        actor_probs = torch.exp(actor_old_log_probs)
+                        rollout_probs_diff = torch.abs(rollout_probs - actor_probs)
+                        rollout_probs_diff = torch.masked_select(rollout_probs_diff, response_mask.bool())
+                        rollout_probs_diff_max = torch.max(rollout_probs_diff)
+                        rollout_probs_diff_mean = torch.mean(rollout_probs_diff)
+                        rollout_probs_diff_std = torch.std(rollout_probs_diff)
+                        metrics.update(
+                            {
+                                "training/rollout_probs_diff_max": rollout_probs_diff_max.detach().item(),
+                                "training/rollout_probs_diff_mean": rollout_probs_diff_mean.detach().item(),
+                                "training/rollout_probs_diff_std": rollout_probs_diff_std.detach().item(),
+                            }
+                        )
+                        # For delta estimation
+                        # self.off_policy_manager.c_optimizer.update_delta_from_rollout_diff(rollout_probs_diff_mean)
+         
+
+                    if self.use_reference_policy:
+                        # compute reference log_prob
+                        with _timer("ref", timing_raw):
+                            if not self.ref_in_actor:
+                                ref_log_prob = self.ref_policy_wg.compute_ref_log_prob(batch)
+                            else:
+                                ref_log_prob = self.actor_rollout_wg.compute_ref_log_prob(batch)
+                            batch = batch.union(ref_log_prob)
+
+                    # compute values
+                    if self.use_critic:
+                        with _timer("values", timing_raw):
+                            values = self.critic_wg.compute_values(batch)
+                            batch = batch.union(values)
+
+                    with _timer("adv", timing_raw):
+                        # # we combine with rule-based rm
+                        # reward_extra_infos_dict: dict[str, list]
+                        # if self.config.reward_model.launch_reward_fn_async:
+                        #     reward_tensor, reward_extra_infos_dict = ray.get(future_reward)
+                        # batch.batch["token_level_scores"] = reward_tensor
+
+                        if reward_extra_infos_dict:
+                            batch.non_tensor_batch.update({k: np.array(v) for k, v in reward_extra_infos_dict.items()})
+
+                        # compute rewards. apply_kl_penalty if available
+                        if self.config.algorithm.use_kl_in_reward:
+                            batch, kl_metrics = apply_kl_penalty(batch, kl_ctrl=self.kl_ctrl_in_reward, kl_penalty=self.config.algorithm.kl_penalty)
+                            metrics.update(kl_metrics)
+                        else:
+                            batch.batch["token_level_rewards"] = batch.batch["token_level_scores"]
+
+                        sequence_reward = batch.batch["token_level_rewards"].sum(-1)
+                        metrics.update({"critic/origin_rewards/mean": torch.mean(sequence_reward).detach().item()})
+                        
+                        self.off_policy_manager.collect_data(batch, is_alpha_sampling)
+
+                        # compute advantages, executed on the driver process
+                        norm_adv_by_std_in_grpo = self.config.algorithm.get("norm_adv_by_std_in_grpo", True)  # GRPO adv normalization factor
+
+                        # [wx] Step 7: Data filter and merge
+                        final_batch = batch
+
+                        if self.off_policy_manager.enable_off_policy:
+                            # current filter data
+                            target_range_samples = torch.sum(filtering_mask).item()
+                            total_samples = len(batch)
+                            
+                            print(f"Current batch: {target_range_samples}/{total_samples} samples in target range (4/8-7/8)")
+                            
+                            batches_to_combine = []
+                            
+                            # 7.1. add current data ([4/8-7/8])
+                            if target_range_samples > 0:
+                                filtered_batch = batch.select_idxs(filtering_mask)
+                                batches_to_combine.append(filtered_batch)
+                                print(f"✓ Using {target_range_samples} samples from current batch")
+                            
+                            # 7.2. add promoted data ([1/8-3/8] -> [4/8-7/8])
+                            if promoted_batch is not None:
+                                if "old_log_probs" not in promoted_batch.batch:
+                                    old_log_prob_promoted = self.actor_rollout_wg.compute_log_prob(promoted_batch)
+                                    old_log_prob_promoted.batch.pop("entropys")
+                                    promoted_batch = promoted_batch.union(old_log_prob_promoted)
+                                
+                                if self.use_reference_policy and "ref_log_prob" not in promoted_batch.batch:
+                                    if not self.ref_in_actor:
+                                        ref_log_prob_promoted = self.ref_policy_wg.compute_ref_log_prob(promoted_batch)
+                                    else:
+                                        ref_log_prob_promoted = self.actor_rollout_wg.compute_ref_log_prob(promoted_batch)
+                                    promoted_batch = promoted_batch.union(ref_log_prob_promoted)
+                                
+                                if self.use_critic and "values" not in promoted_batch.batch:
+                                    values_promoted = self.critic_wg.compute_values(promoted_batch)
+                                    promoted_batch = promoted_batch.union(values_promoted)
+                                
+
+                                # promoted_batch.batch["response_mask"] = compute_response_mask(promoted_batch)
+
+                                if self.config.algorithm.use_kl_in_reward:
+                                    promoted_batch, _ = apply_kl_penalty(
+                                        promoted_batch, 
+                                        kl_ctrl=self.kl_ctrl_in_reward, 
+                                        kl_penalty=self.config.algorithm.kl_penalty
+                                    )
+                                else:
+                                    promoted_batch.batch["token_level_rewards"] = promoted_batch.batch["token_level_scores"]
+
+
+                                batches_to_combine.append(promoted_batch)
+                                print(f"✓ Using {len(promoted_batch)} promoted samples from buffer")
+                            
+                            # 7.3. add buffer data ([4/8-7/8])
+                            available_buffer_samples = self.off_policy_manager.get_available_groups_count()
+                            if available_buffer_samples > 0:
+                                
+                                current_total = sum(len(b) for b in batches_to_combine)
+                                desired_total = total_samples
+                                additional_needed = max(0, desired_total - current_total)
+                                
+                                if additional_needed > 0:
+                                    buffer_batch = self.off_policy_manager.sample_filtered_groups(additional_needed)
+                                    if buffer_batch is not None:
+                                        
+                                        if "old_log_probs" not in buffer_batch.batch:
+                                            old_log_prob_buffer = self.actor_rollout_wg.compute_log_prob(buffer_batch)
+                                            old_log_prob_buffer.batch.pop("entropys")
+                                            buffer_batch = buffer_batch.union(old_log_prob_buffer)
+                                        
+                                        if self.use_reference_policy and "ref_log_prob" not in buffer_batch.batch:
+                                            if not self.ref_in_actor:
+                                                ref_log_prob_buffer = self.ref_policy_wg.compute_ref_log_prob(buffer_batch)
+                                            else:
+                                                ref_log_prob_buffer = self.actor_rollout_wg.compute_ref_log_prob(buffer_batch)
+                                            buffer_batch = buffer_batch.union(ref_log_prob_buffer)
+                                        
+                                        if self.use_critic and "values" not in buffer_batch.batch:
+                                            values_buffer = self.critic_wg.compute_values(buffer_batch)
+                                            buffer_batch = buffer_batch.union(values_buffer)
+                                        
+                                        if self.config.algorithm.use_kl_in_reward:
+                                            buffer_batch, _ = apply_kl_penalty(
+                                                buffer_batch, 
+                                                kl_ctrl=self.kl_ctrl_in_reward, 
+                                                kl_penalty=self.config.algorithm.kl_penalty
+                                            )
+                                        else:
+                                            buffer_batch.batch["token_level_rewards"] = buffer_batch.batch["token_level_scores"]
+
+                                        if "response_mask" not in buffer_batch.batch.keys():
+                                            buffer_batch.batch["response_mask"] = compute_response_mask(buffer_batch)
+
+                                        batches_to_combine.append(buffer_batch)
+                                        print(f"✓ Using {len(buffer_batch)} additional samples from buffer")
+                            
+                            # 7.4. Combine Batch
+                            if len(batches_to_combine) > 1:
+                                final_batch = DataProto.concat(batches_to_combine)
+                                final_batch.batch["filtering_mask"] = self.off_policy_manager.compute_filtering_mask(final_batch)
+                                print(f"🎯 Final training batch: {len(final_batch)} samples total")
+                            elif len(batches_to_combine) == 1:
+                                final_batch = batches_to_combine[0]
+                                print(f"🎯 Final training batch: {len(final_batch)} samples")
+                            else:
+                                print("⚠️  No suitable samples for training, using original batch")
+                                final_batch = batch
+
+                        # Get off policy batch stats from off policy buffer
+                        off_policy_stats = self.off_policy_manager.get_off_policy_stats()
+                        
+                        batch = compute_advantage(
+                            final_batch,
+                            adv_estimator=self.config.algorithm.adv_estimator,
+                            gamma=self.config.algorithm.gamma,
+                            lam=self.config.algorithm.lam,
+                            num_repeat=self.config.actor_rollout_ref.rollout.n,
+                            norm_adv_by_std_in_grpo=True,
+                            multi_turn=self.config.actor_rollout_ref.rollout.multi_turn.enable,
+                            config=self.config.algorithm,
+                            off_policy_stats=off_policy_stats, # with off policy stats and data filter 
+                        )
+
+                    # [wx] Step 7: Update C
+                    # self.off_policy_manager.update_C(batch)
+
+                    # update critic
+                    if self.use_critic:
+                        with _timer("update_critic", timing_raw):
+                            critic_output = self.critic_wg.update_critic(batch)
+                        critic_output_metrics = reduce_metrics(critic_output.meta_info["metrics"])
+                        metrics.update(critic_output_metrics)
+
+                    # implement critic warmup
+                    if self.config.trainer.critic_warmup <= self.global_steps:
+                        # update actor
+                        with _timer("update_actor", timing_raw):
+                            batch.meta_info["multi_turn"] = self.config.actor_rollout_ref.rollout.multi_turn.enable
+                            actor_output = self.actor_rollout_wg.update_actor(batch)
+                        actor_output_metrics = reduce_metrics(actor_output.meta_info["metrics"])
+                        metrics.update(actor_output_metrics)
+
+
+                    # Log rollout generations if enabled
+                    rollout_data_dir = self.config.trainer.get("rollout_data_dir", None)
+                    if rollout_data_dir:
+                        with _timer("dump_rollout_generations", timing_raw):
+                            print(batch.batch.keys())
+                            inputs = self.tokenizer.batch_decode(batch.batch["prompts"], skip_special_tokens=True)
+                            outputs = self.tokenizer.batch_decode(batch.batch["responses"], skip_special_tokens=True)
+                            scores = batch.batch["token_level_scores"].sum(-1).cpu().tolist()
+                            self._dump_generations(
+                                inputs=inputs,
+                                outputs=outputs,
+                                scores=scores,
+                                reward_extra_infos_dict=reward_extra_infos_dict,
+                                dump_path=rollout_data_dir,
+                            )
+
+                    # validate
+                    if self.val_reward_fn is not None and self.config.trainer.test_freq > 0 and (is_last_step or self.global_steps % self.config.trainer.test_freq == 0):
+                        with _timer("testing", timing_raw):
+                            val_metrics: dict = self._validate()
+                            if is_last_step:
+                                last_val_metrics = val_metrics
+                        metrics.update(val_metrics)
+
+                    if self.config.trainer.save_freq > 0 and (is_last_step or self.global_steps % self.config.trainer.save_freq == 0):
+                        with _timer("save_checkpoint", timing_raw):
+                            self._save_checkpoint()
+
+                # training metrics
+                metrics.update({
+                    "training/global_step": self.global_steps,
+                    "training/epoch": epoch,
+                })
+
+                # off policy metrics
+                off_policy_metrics = self.off_policy_manager.get_metrics()
+                metrics.update(off_policy_metrics)
+                
+                # if self.off_policy_manager.enable_off_policy:
+                    
+                #     scores = batch.batch["token_level_scores"].sum(dim=-1).cpu().numpy()
+                    
+                #     buffer_range_count = sum(1 for s in scores if 1/8 <= s <= 3/8)
+                #     target_range_count = sum(1 for s in scores if 4/8 <= s <= 7/8)
+                #     high_range_count = sum(1 for s in scores if s > 7/8)
+                #     low_range_count = sum(1 for s in scores if s < 1/8)
+                    
+                #     metrics.update({
+                #         "training/buffer_range_samples": buffer_range_count,    # 1/8-3/8
+                #         "training/target_range_samples": target_range_count,    # 4/8-7/8  
+                #         "training/high_range_samples": high_range_count,        # >7/8
+                #         "training/low_range_samples": low_range_count,          # <1/8
+                #         "training/total_training_samples": len(batch),
+                #     })
+
+                # collect metrics
+                metrics.update(compute_data_metrics(batch=batch, use_critic=self.use_critic))
+                metrics.update(compute_timing_metrics(batch=batch, timing_raw=timing_raw))
+                # TODO: implement actual tflpo and theoretical tflpo
+                n_gpus = self.resource_pool_manager.get_n_gpus()
+                metrics.update(compute_throughout_metrics(batch=batch, timing_raw=timing_raw, n_gpus=n_gpus))
+
+                # TODO: make a canonical logger that supports various backend
+                logger.log(data=metrics, step=self.global_steps)
+
+                progress_bar.update(1)
+                self.off_policy_manager.step_count += 1
+                self.global_steps += 1
+                if is_last_step:
+                    pprint(f"Final validation metrics: {last_val_metrics}")
+                    progress_bar.close()
+                    return
+
+
 
     def __del__(self):
         if hasattr(self, '_alpha_temp_dir') and os.path.exists(self._alpha_temp_dir):
