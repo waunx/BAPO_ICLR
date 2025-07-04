@@ -226,8 +226,7 @@ class OffPolicyGroupBuffer:
 class OffPolicyManager:
     def __init__(self, config):
         self.config = config
-        self.enable_off_policy_samples = config.algorithm.get("enable_off_policy_samples", True) 
-        self.enable_off_policy_rollout = config.algorithm.get("enable_off_policy_rollout", True) 
+        self.enable_off_policy = config.algorithm.get("enable_off_policy_grpo", True) 
         self.alpha_update_freq = config.algorithm.get("off_policy_update_freq", 10)
         self.max_prompt_length = config.data.get("max_prompt_length", 1024)
         # 新的准确率区间策略
@@ -269,7 +268,7 @@ class OffPolicyManager:
 
     def collect_data(self, batch, is_alpha_sampling: bool):
         """收集数据到buffer，基于uid group的平均分数判断是否在1/8-3/8区间"""
-        if not self.enable_off_policy_samples:
+        if not self.enable_off_policy:
             return
             
         scores = batch.batch["token_level_scores"].sum(dim=-1).cpu().numpy()
@@ -312,7 +311,7 @@ class OffPolicyManager:
 
     def sample_filtered_groups(self, target_groups: int) -> Optional['DataProto']:
         """从buffer中采样4/8-7/8区间的数据用于训练"""
-        if not self.enable_off_policy_samples:
+        if not self.enable_off_policy:
             return None
         
         def filter_func(stats):
@@ -339,7 +338,7 @@ class OffPolicyManager:
     
     def get_available_groups_count(self) -> int:
         """获取buffer中4/8-7/8区间的可用数据数量"""
-        if not self.enable_off_policy_samples:
+        if not self.enable_off_policy:
             return 0
         
         def filter_func(stats):
@@ -359,7 +358,7 @@ class OffPolicyManager:
     
     def reevaluate_and_promote_buffer_samples(self, actor_wg, reward_fn, tokenizer) -> Optional['DataProto']:
         """重新评估buffer中的样本，如果group平均分数达到4/8-7/8则提升到训练集并从buffer移除"""
-        if not self.enable_off_policy_samples:
+        if not self.enable_off_policy:
             return None
         
         # 获取buffer中的所有样本，按uid分组
@@ -542,7 +541,7 @@ class OffPolicyManager:
 
     def compute_filtering_mask(self, batch: DataProto) -> torch.Tensor:
         """计算过滤mask - 基于uid group的平均分数判断是否在4/8-7/8区间"""
-        if not self.enable_off_policy_samples:
+        if not self.enable_off_policy:
             return torch.ones(len(batch), dtype=torch.bool)
         
         scores = batch.batch["token_level_scores"].sum(dim=-1).cpu().numpy()
@@ -572,7 +571,7 @@ class OffPolicyManager:
     
     def get_metrics(self):
         """获取策略相关的指标"""
-        if not self.enable_off_policy_samples:
+        if not self.enable_off_policy:
             return {}
             
         buffer_metrics = self.buffer.get_metrics()
@@ -721,7 +720,7 @@ class OffPolicyManager:
         return dataproto
     
     def get_off_policy_stats(self) -> Optional[dict]:
-        if not self.enable_off_policy_samples:
+        if not self.enable_off_policy:
             return None
         
         all_stats = self.buffer.get_all_stats()
@@ -737,7 +736,7 @@ class OffPolicyManager:
     
     def should_update_alpha_policy(self) -> bool:
         """whether should update alpha policy or not"""
-        return self.enable_off_policy_rollout and (self.step_count % self.alpha_update_freq == 0)
+        return self.enable_off_policy and (self.step_count % self.alpha_update_freq == 0)
     
     def update_alpha_policy(self, actor_wg, global_steps):
         """update new alpha policy checkpoint from current policy"""
@@ -2237,20 +2236,20 @@ class RayPPOTrainer:
 
                     # [wx] Step 1: Check and update alpha policy for setting off-policy sampling 
                     should_update_alpha = self.off_policy_manager.should_update_alpha_policy()
-                    if self.off_policy_manager.enable_off_policy_rollout and should_update_alpha:
+                    if should_update_alpha:
                         with _timer("update_alpha_policy", timing_raw):
                             self.off_policy_manager.update_alpha_policy(self.actor_rollout_wg, self.global_steps)
 
                     # [wx] Step 2: Generate batch using alpha policy
                     with _timer("gen", timing_raw):
                         
-                        if self.off_policy_manager.enable_off_policy_rollout:
+                        if self.off_policy_manager.enable_off_policy:
                             gen_batch_output, is_alpha_sampling = self.off_policy_manager.sample_with_alpha_policy(
                                 gen_batch, self.actor_rollout_wg
                             )
                         else:
                             gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)
-                            is_alpha_sampling = True
+                            is_alpha_sampling = False
                         
                         timing_raw.update(gen_batch_output.meta_info["timing"])
                         gen_batch_output.meta_info.pop("timing", None)
@@ -2327,7 +2326,7 @@ class RayPPOTrainer:
                     # [wx] Step 5: Re-evaluate bad cases using current policy
 
                     promoted_batch = None
-                    if self.off_policy_manager.enable_off_policy_samples:
+                    if self.off_policy_manager.enable_off_policy:
                         
                         if self.global_steps % 1 == 0: 
                             promoted_batch = self.off_policy_manager.reevaluate_and_promote_buffer_samples(
@@ -2426,7 +2425,7 @@ class RayPPOTrainer:
                         # [wx] Step 7: Data filter and merge
                         final_batch = batch
 
-                        if self.off_policy_manager.enable_off_policy_samples:
+                        if self.off_policy_manager.enable_off_policy:
                             # current filter data
                             target_range_samples = torch.sum(filtering_mask).item()
                             total_samples = len(batch)
@@ -2569,17 +2568,17 @@ class RayPPOTrainer:
                                 print("⚠️  No suitable samples for training, using original batch")
                                 final_batch = batch
 
-                            # # 添加数据一致性检查
-                            # print(f"Final batch validation:")
-                            # print(f"  - Total samples: {len(final_batch)}")
-                            # print(f"  - Unique UIDs: {len(set(str(uid) for uid in final_batch.non_tensor_batch['uid']))}")
-                            # print(f"  - Token rewards shape: {final_batch.batch['token_level_rewards'].shape}")
-                            # print(f"  - Response mask shape: {final_batch.batch['response_mask'].shape}")
+                            # 添加数据一致性检查
+                            print(f"Final batch validation:")
+                            print(f"  - Total samples: {len(final_batch)}")
+                            print(f"  - Unique UIDs: {len(set(str(uid) for uid in final_batch.non_tensor_batch['uid']))}")
+                            print(f"  - Token rewards shape: {final_batch.batch['token_level_rewards'].shape}")
+                            print(f"  - Response mask shape: {final_batch.batch['response_mask'].shape}")
                             
-                            # # 检查rewards的数值范围
-                            # rewards = final_batch.batch['token_level_rewards']
-                            # print(f"  - Rewards range: [{rewards.min().item():.3f}, {rewards.max().item():.3f}]")
-                            # print(f"  - Rewards mean: {rewards.mean().item():.3f}")
+                            # 检查rewards的数值范围
+                            rewards = final_batch.batch['token_level_rewards']
+                            print(f"  - Rewards range: [{rewards.min().item():.3f}, {rewards.max().item():.3f}]")
+                            print(f"  - Rewards mean: {rewards.mean().item():.3f}")
 
                         # Get off policy batch stats from off policy buffer
                         off_policy_stats = self.off_policy_manager.get_off_policy_stats()
@@ -2653,6 +2652,23 @@ class RayPPOTrainer:
                 # off policy metrics
                 off_policy_metrics = self.off_policy_manager.get_metrics()
                 metrics.update(off_policy_metrics)
+                
+                # if self.off_policy_manager.enable_off_policy:
+                    
+                #     scores = batch.batch["token_level_scores"].sum(dim=-1).cpu().numpy()
+                    
+                #     buffer_range_count = sum(1 for s in scores if 1/8 <= s <= 3/8)
+                #     target_range_count = sum(1 for s in scores if 4/8 <= s <= 7/8)
+                #     high_range_count = sum(1 for s in scores if s > 7/8)
+                #     low_range_count = sum(1 for s in scores if s < 1/8)
+                    
+                #     metrics.update({
+                #         "training/buffer_range_samples": buffer_range_count,    # 1/8-3/8
+                #         "training/target_range_samples": target_range_count,    # 4/8-7/8  
+                #         "training/high_range_samples": high_range_count,        # >7/8
+                #         "training/low_range_samples": low_range_count,          # <1/8
+                #         "training/total_training_samples": len(batch),
+                #     })
 
                 # collect metrics
                 metrics.update(compute_data_metrics(batch=batch, use_critic=self.use_critic))

@@ -182,10 +182,15 @@ class TaskRunner:
 
     def _validate_adaptive_filtering_config(self, config):
         
-        if config.algorithm.adv_estimator in ["grpo_adaptive_filter", "grpo_off_policy"]:
+        if config.algorithm.adv_estimator in ["grpo_off_policy"]:
 
-            if not config.algorithm.get("enable_off_policy_grpo", False):
-                print("Warning: Using off policy advantage estimator but enable_off_policy_grpo=False")
+            if not config.algorithm.get("enable_off_policy_rollout", False):
+                print("Warning: Using old policy rollout but enable_off_policy_rollout=False")
+
+        if config.algorithm.adv_estimator in ["grpo_adaptive_filter"]:
+
+            if not config.algorithm.get("enable_off_policy_samples", False):
+                print("Warning: Using off policy advantage estimator but enable_off_policy_samples=False")
             
             initial_c = config.algorithm.get("initial_c_value", 0.4)
             if not (0.1 <= initial_c <= 0.7):
