@@ -21,6 +21,8 @@ import ray
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
 from verl.trainer.ppo.reward import load_reward_manager
 
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning, module="torch.distributed.fsdp")
 
 @hydra.main(config_path="config", config_name="ppo_trainer", version_base=None)
 def main(config):

@@ -278,10 +278,7 @@ class vLLMRollout(BaseRollout):
         elif is_re_rollout:
             # [wx] For re-evaluate 
             kwargs = {
-                "n": 1,  
-                "recompute_log_prob": False,
-                "temperature": self.config.val_kwargs.temperature,
-                "do_sample": True,
+                "n": 2 * self.config.val_kwargs.n,  
             }
 
         lora_requests = None

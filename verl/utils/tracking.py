@@ -121,7 +121,7 @@ class Tracking:
         if "console" in default_backend:
             from verl.utils.logger.aggregate_logger import LocalLogger
 
-            self.console_logger = LocalLogger(print_to_console=True)
+            self.console_logger = LocalLogger(print_to_console=False)
             self.logger["console"] = self.console_logger
 
         if "clearml" in default_backend:

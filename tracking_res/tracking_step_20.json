@@ -1,0 +1,5472 @@
+{
+  "step": 20,
+  "stats": {
+    "step": 20,
+    "total_prompts": 496,
+    "improved_prompts": 235,
+    "degraded_prompts": 60,
+    "unchanged_prompts": 201,
+    "improvement_rate": 0.4737903225806452,
+    "degradation_rate": 0.12096774193548387,
+    "top_improved": [
+      {
+        "prompt_hash": "1633a4227667fcf2",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nThe value of $y$ ...",
+        "baseline_acc": 0.0,
+        "current_acc": 0.75,
+        "improvement": 0.75
+      },
+      {
+        "prompt_hash": "2cadddeb5378da0e",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nDetermine the rem...",
+        "baseline_acc": 0.25,
+        "current_acc": 1.0,
+        "improvement": 0.75
+      },
+      {
+        "prompt_hash": "f3f218aa7693aecc",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nA curve is parame...",
+        "baseline_acc": 0.375,
+        "current_acc": 1.0,
+        "improvement": 0.625
+      },
+      {
+        "prompt_hash": "44b7287c53405492",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nThe average of Am...",
+        "baseline_acc": 0.375,
+        "current_acc": 1.0,
+        "improvement": 0.625
+      },
+      {
+        "prompt_hash": "4df15600934d13ea",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nThe smallest dist...",
+        "baseline_acc": 0.25,
+        "current_acc": 0.875,
+        "improvement": 0.625
+      },
+      {
+        "prompt_hash": "b15a7f83ebfec1a1",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nA number is selec...",
+        "baseline_acc": 0.25,
+        "current_acc": 0.875,
+        "improvement": 0.625
+      },
+      {
+        "prompt_hash": "00518e71155f12e2",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nWrite the express...",
+        "baseline_acc": 0.375,
+        "current_acc": 1.0,
+        "improvement": 0.625
+      },
+      {
+        "prompt_hash": "b910627458411bae",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nWhat is the value...",
+        "baseline_acc": 0.375,
+        "current_acc": 1.0,
+        "improvement": 0.625
+      },
+      {
+        "prompt_hash": "267794a244de1101",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nAdd 313.9 to 12.6...",
+        "baseline_acc": 0.375,
+        "current_acc": 1.0,
+        "improvement": 0.625
+      },
+      {
+        "prompt_hash": "88e27cff2d648095",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nThirty-five stude...",
+        "baseline_acc": 0.25,
+        "current_acc": 0.875,
+        "improvement": 0.625
+      },
+      {
+        "prompt_hash": "9c5b904bcb6cb00e",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nA shirt's sale pr...",
+        "baseline_acc": 0.125,
+        "current_acc": 0.75,
+        "improvement": 0.625
+      },
+      {
+        "prompt_hash": "ef9850fdd9148140",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nThe number $(\\sqr...",
+        "baseline_acc": 0.375,
+        "current_acc": 1.0,
+        "improvement": 0.625
+      },
+      {
+        "prompt_hash": "6f95d56f17958512",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nThe proper diviso...",
+        "baseline_acc": 0.375,
+        "current_acc": 0.875,
+        "improvement": 0.5
+      },
+      {
+        "prompt_hash": "47f317f6cafa6599",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nEvaluate $\\lceil ...",
+        "baseline_acc": 0.25,
+        "current_acc": 0.75,
+        "improvement": 0.5
+      },
+      {
+        "prompt_hash": "740eb287362409fd",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nLet $F_1 = (10,2)...",
+        "baseline_acc": 0.5,
+        "current_acc": 1.0,
+        "improvement": 0.5
+      },
+      {
+        "prompt_hash": "3c2b8a6d81455eba",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nA set of three po...",
+        "baseline_acc": 0.375,
+        "current_acc": 0.875,
+        "improvement": 0.5
+      },
+      {
+        "prompt_hash": "e123a58d6f42744a",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nPaul and Jesse ea...",
+        "baseline_acc": 0.375,
+        "current_acc": 0.875,
+        "improvement": 0.5
+      },
+      {
+        "prompt_hash": "72ba54664edb9823",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nA group of $N$ st...",
+        "baseline_acc": 0.125,
+        "current_acc": 0.625,
+        "improvement": 0.5
+      },
+      {
+        "prompt_hash": "f5b8914776422faf",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nSam is carrying a...",
+        "baseline_acc": 0.5,
+        "current_acc": 1.0,
+        "improvement": 0.5
+      },
+      {
+        "prompt_hash": "e29d0296a1caafe0",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nWhat is the sum o...",
+        "baseline_acc": 0.25,
+        "current_acc": 0.75,
+        "improvement": 0.5
+      },
+      {
+        "prompt_hash": "04a5eaa3990e9f13",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nLet $\\mathbf{a},$...",
+        "baseline_acc": 0.375,
+        "current_acc": 0.875,
+        "improvement": 0.5
+      },
+      {
+        "prompt_hash": "0eeb64b967c017ad",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nA cylindrical bea...",
+        "baseline_acc": 0.5,
+        "current_acc": 1.0,
+        "improvement": 0.5
+      },
+      {
+        "prompt_hash": "4d8d8b4527597308",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nWhat is the base ...",
+        "baseline_acc": 0.5,
+        "current_acc": 1.0,
+        "improvement": 0.5
+      },
+      {
+        "prompt_hash": "5386954bfd27d776",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nLet $f$ be define...",
+        "baseline_acc": 0.125,
+        "current_acc": 0.625,
+        "improvement": 0.5
+      },
+      {
+        "prompt_hash": "a5322d5ac8bd6550",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nWhat is the last ...",
+        "baseline_acc": 0.375,
+        "current_acc": 0.875,
+        "improvement": 0.5
+      },
+      {
+        "prompt_hash": "f1862b45046bd1ce",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nIf $a\\star b = 9a...",
+        "baseline_acc": 0.25,
+        "current_acc": 0.75,
+        "improvement": 0.5
+      },
+      {
+        "prompt_hash": "4a94e2dce5797438",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nWhat is the avera...",
+        "baseline_acc": 0.25,
+        "current_acc": 0.75,
+        "improvement": 0.5
+      },
+      {
+        "prompt_hash": "d7fa1a3ec7925f83",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nOn a particular m...",
+        "baseline_acc": 0.5,
+        "current_acc": 1.0,
+        "improvement": 0.5
+      },
+      {
+        "prompt_hash": "0c39c65c42729866",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nConvert the point...",
+        "baseline_acc": 0.625,
+        "current_acc": 1.0,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "04562048e764f5db",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nDefine\n\\[p = \\sum...",
+        "baseline_acc": 0.625,
+        "current_acc": 1.0,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "ee0572d1bf43f707",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nBelow is the grap...",
+        "baseline_acc": 0.125,
+        "current_acc": 0.5,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "c761e837240a5bae",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nThe coordinates o...",
+        "baseline_acc": 0.5,
+        "current_acc": 0.875,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "f41f35da93cbaa0a",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nBill walks $\\frac...",
+        "baseline_acc": 0.5,
+        "current_acc": 0.875,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "4efcbfe9c1050472",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nLet\n\\[x^8 + 3x^4 ...",
+        "baseline_acc": 0.5,
+        "current_acc": 0.875,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "32e3dd5c4cc68e69",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nThere exist const...",
+        "baseline_acc": 0.0,
+        "current_acc": 0.375,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "a042affab45e7028",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nCompute $58_9 - 1...",
+        "baseline_acc": 0.625,
+        "current_acc": 1.0,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "b8e1d53db341fb46",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nTwo fair, 6-sided...",
+        "baseline_acc": 0.625,
+        "current_acc": 1.0,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "0438a7c275e18287",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nLet $f(x) = x^3 +...",
+        "baseline_acc": 0.5,
+        "current_acc": 0.875,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "d7eb3ba742f90159",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nThe product of $3...",
+        "baseline_acc": 0.625,
+        "current_acc": 1.0,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "e9a44f7b143f32a3",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nConsider the func...",
+        "baseline_acc": 0.375,
+        "current_acc": 0.75,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "c19898d158c367f8",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nSolve for $x$: $\\...",
+        "baseline_acc": 0.625,
+        "current_acc": 1.0,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "284e77efd0ef78d9",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nIn the diagram, $...",
+        "baseline_acc": 0.25,
+        "current_acc": 0.625,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "1a39ea92be0e8b98",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nEvaluate $\\log_26...",
+        "baseline_acc": 0.625,
+        "current_acc": 1.0,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "26aa2a1b2e33c64a",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nSimplify $\\tan 10...",
+        "baseline_acc": 0.125,
+        "current_acc": 0.5,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "cbfdc4885d6e7f72",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nA line is paramet...",
+        "baseline_acc": 0.625,
+        "current_acc": 1.0,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "d09291d26347227c",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nWhat real values ...",
+        "baseline_acc": 0.5,
+        "current_acc": 0.875,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "a6b83bfdcaa6973c",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nOne gear turns $3...",
+        "baseline_acc": 0.0,
+        "current_acc": 0.375,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "f13f01512cfdc94b",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nA palindrome is a...",
+        "baseline_acc": 0.0,
+        "current_acc": 0.375,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "26428cd58c94d51b",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nFind the minimum ...",
+        "baseline_acc": 0.625,
+        "current_acc": 1.0,
+        "improvement": 0.375
+      },
+      {
+        "prompt_hash": "a705631b4433d459",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nIf $\\frac{\\sqrt{2...",
+        "baseline_acc": 0.625,
+        "current_acc": 1.0,
+        "improvement": 0.375
+      }
+    ],
+    "top_degraded": [
+      {
+        "prompt_hash": "0ff7a4716e5d7746",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nSimplify: $\\frac{...",
+        "baseline_acc": 0.625,
+        "current_acc": 0.25,
+        "degradation": 0.375
+      },
+      {
+        "prompt_hash": "ec7b6b585cc5e8bb",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nA figure skater i...",
+        "baseline_acc": 0.5,
+        "current_acc": 0.125,
+        "degradation": 0.375
+      },
+      {
+        "prompt_hash": "6347bb078c3c9525",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nFor the eight cou...",
+        "baseline_acc": 0.875,
+        "current_acc": 0.5,
+        "degradation": 0.375
+      },
+      {
+        "prompt_hash": "a98102b1d02564d6",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nLet $F_1$ and $F_...",
+        "baseline_acc": 0.5,
+        "current_acc": 0.125,
+        "degradation": 0.375
+      },
+      {
+        "prompt_hash": "873e2e7f4c195d35",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nLet $a,$ $b,$ and...",
+        "baseline_acc": 0.5,
+        "current_acc": 0.125,
+        "degradation": 0.375
+      },
+      {
+        "prompt_hash": "a34bb4dca696ab4f",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nThe expression $2...",
+        "baseline_acc": 0.25,
+        "current_acc": 0.0,
+        "degradation": 0.25
+      },
+      {
+        "prompt_hash": "6e0093c8b66ed909",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nRemmy wants to di...",
+        "baseline_acc": 0.25,
+        "current_acc": 0.0,
+        "degradation": 0.25
+      },
+      {
+        "prompt_hash": "26ad2e0216da8756",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nLet $z$ be a comp...",
+        "baseline_acc": 0.375,
+        "current_acc": 0.125,
+        "degradation": 0.25
+      },
+      {
+        "prompt_hash": "9b6a2acd35d10c95",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nFind $\\sin 20^\\ci...",
+        "baseline_acc": 0.25,
+        "current_acc": 0.0,
+        "degradation": 0.25
+      },
+      {
+        "prompt_hash": "c574803279118978",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nFor a point $P,$ ...",
+        "baseline_acc": 0.625,
+        "current_acc": 0.375,
+        "degradation": 0.25
+      },
+      {
+        "prompt_hash": "391192c6da5b6df4",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nYann and Camille ...",
+        "baseline_acc": 1.0,
+        "current_acc": 0.75,
+        "degradation": 0.25
+      },
+      {
+        "prompt_hash": "24c29551ec98303d",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nLet $f(x)=\\left\\l...",
+        "baseline_acc": 0.5,
+        "current_acc": 0.25,
+        "degradation": 0.25
+      },
+      {
+        "prompt_hash": "8a590e73aa1d059e",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nIf\n\\[\\sqrt[3]{2} ...",
+        "baseline_acc": 0.5,
+        "current_acc": 0.25,
+        "degradation": 0.25
+      },
+      {
+        "prompt_hash": "4a2157788f4a9308",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nThe data in the t...",
+        "baseline_acc": 0.25,
+        "current_acc": 0.0,
+        "degradation": 0.25
+      },
+      {
+        "prompt_hash": "a67092463e4cc388",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nA $90^\\circ$ rota...",
+        "baseline_acc": 0.5,
+        "current_acc": 0.25,
+        "degradation": 0.25
+      },
+      {
+        "prompt_hash": "3dceaa8fc6546ca0",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nIn a certain isos...",
+        "baseline_acc": 1.0,
+        "current_acc": 0.75,
+        "degradation": 0.25
+      },
+      {
+        "prompt_hash": "8ccd288ee608d2ae",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nSolve\n\\[\\sqrt{x +...",
+        "baseline_acc": 1.0,
+        "current_acc": 0.75,
+        "degradation": 0.25
+      },
+      {
+        "prompt_hash": "f34befb5d5da60cc",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nIn how many ways ...",
+        "baseline_acc": 1.0,
+        "current_acc": 0.875,
+        "degradation": 0.125
+      },
+      {
+        "prompt_hash": "4fad86e225842d42",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nConsider the geom...",
+        "baseline_acc": 0.125,
+        "current_acc": 0.0,
+        "degradation": 0.125
+      },
+      {
+        "prompt_hash": "1643c4804c71a1b9",
+        "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nWhat is the resul...",
+        "baseline_acc": 1.0,
+        "current_acc": 0.875,
+        "degradation": 0.125
+      }
+    ],
+    "avg_improvement": 0.2547872340425532,
+    "max_improvement": 0.75,
+    "avg_degradation": 0.17083333333333334,
+    "max_degradation": 0.375
+  },
+  "full_history": {
+    "0c39c65c42729866": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "04562048e764f5db": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "e7edb0cadb88f11b": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "fe5235646b67a99b": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "759470a5d9987d88": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "dda561ecf432f71e": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "ad33297648553a58": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "39bcab382bf450ec": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "91e4b20a05e5f61e": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "a34bb4dca696ab4f": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "1f05cad757fb3e06": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "3241e40a7067c1f8": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "6f95d56f17958512": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "39935e89fbfe95af": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "88e674dea60ac290": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "58f993b3659f633d": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "d59705b80b66647d": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "ee0572d1bf43f707": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "9f2109acab143908": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "99b48f1ab3e8ecd4": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "202cb2e49df1bf8a": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "12508678a7be2a5a": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "e337ed88ea6fd906": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "b7aa99b1bbe314a2": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "5f87d5a3420f7e64": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "6dab9ee5f5b8236b": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "13e779bd31f103f3": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "060fa387eaed8b3f": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "ae11404c690ae3ff": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "36cc0c2b7616a113": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "d0066177462cab7d": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "2764168e0135b7da": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "f34befb5d5da60cc": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "4fad86e225842d42": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "4a72d9df881a9641": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "b1a97706edb89f2a": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "e5a179ab16326027": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "6cb622750fe5624e": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "7500d5db11109d91": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "1643c4804c71a1b9": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "8512bbfe35907011": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "c761e837240a5bae": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "66b362a374d9b852": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "2a2da498ac1d38eb": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "f41f35da93cbaa0a": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "0eca850a86071ad8": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "6ea0620d02db26af": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "3580db90b08fcdb5": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "c9d2b6e9bc0f620e": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "e8fa5ce34216a23c": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "f82fde3bd6d25a0f": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "e9046741bccfbdbf": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "0ff7a4716e5d7746": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "8a4ebc9a90113464": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "8f301b0cb20a43a1": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "1936e1bb89892ffb": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "b5e008b39206917e": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "78fde670cb04c470": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "b3428fae08ea0d90": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "7126eb87e25c4768": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "e7bfec6a022638b3": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "1589faca24148039": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "a58204bfa3355ac5": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "4efcbfe9c1050472": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "32e3dd5c4cc68e69": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "21805d94a2ac6d90": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "82ba6127956b35e8": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "cbddca2249c3fb3a": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "70530db28c071e27": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "b6c19d095db136b9": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "a042affab45e7028": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "27c4cd4f0eea9743": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "ed1733e98ca5c76a": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "7c47556d1ef42698": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "040bad530fb23310": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "b8e1d53db341fb46": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "2944a7dac10fbf08": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "c9a6b6527cf8b39d": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "0438a7c275e18287": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "e3e8798994606823": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "a6fb5e4818e71d4e": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "b90e16c4d9565dc1": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "713948ec7b1a1927": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "a2a825c5c80f5d82": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "d7eb3ba742f90159": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "30859c5a66a0092d": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "95614ec685bd62fc": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "7e8f0b7ed312fd13": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "e9a44f7b143f32a3": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "a525fb11f9ee9407": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "6e0093c8b66ed909": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "4b7a9f69a62162d8": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "32aec7e8c2a78100": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "e5a873f93092a87d": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "c814152195447671": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "78ee2c2eb9ee3c1e": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "1131016eca79b2c5": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "ec7b6b585cc5e8bb": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "0f6923413139789f": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "73cbe0c06ef9708b": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "5da12a05a652cfdb": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "6394cb1614e70de6": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "e62e3d067cb2d627": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "d0f69b79334e0fc8": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "b39762704f402283": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "6347bb078c3c9525": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "9ea2215e0e749212": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "17fda1467373182f": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "a98102b1d02564d6": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "ac04a018c790b0a3": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "825bf22049529ee2": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "2b14576c29a086a2": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "049b3d504c300783": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "ebdf313f933f6992": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "49cca99c13af611b": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "1068100c103ba1cc": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "863a4dedcfa37fe7": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "4bab71f413a20fbc": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "ddb43f6086e6ed8d": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "ff2f3390ce7aab5d": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "5c86b837838dba44": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "c19898d158c367f8": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "92ff69ee21707441": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "284e77efd0ef78d9": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "c1c5a2ad0a183e8d": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "47f317f6cafa6599": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "0e274a678dbd4317": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "820ebadaf0f2dc14": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "652039373fe76764": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "35486d02a0fc1788": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "7de7e0d7b1503af2": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "34b8c926d1a409c8": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "2dc441fcebccc79b": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "914abb9a597c4c94": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "740eb287362409fd": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "48afdf6aa1d9eaa0": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "70d394ac4b904c9b": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "e6e0051726663950": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "4224650ba804f1fe": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "a4529bc27f4c68fe": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "4d0997a98021ed19": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "c00d6d1bead214ea": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "1970b3590b8e61b2": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "9fb56a0e66d193d2": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "f3f218aa7693aecc": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "26ad2e0216da8756": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "38eae4fc8470b282": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "1247353b3aaf37e1": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "745cde38b9f7e013": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "a29f66a594948623": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "1393341a2a4d5127": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "09c7ef158f8aa666": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "580a237d960f1f00": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "3c2b8a6d81455eba": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "1e944c08ff7d7b22": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "fb4dccc443afa3ec": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "d1e2de8c3a07e11d": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "e8891e3220c8be61": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "e2191847dc273cd9": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "8d882b12e6cf662d": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "3f03271f07e0cc03": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "1a39ea92be0e8b98": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "c559b9f8d107c035": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "29ac82dc0f608850": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "26aa2a1b2e33c64a": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "f7d08038011f6234": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "b6244c01d3286d37": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "13037695dffff4a7": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "c4c04d5f61c148c6": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "3733618a0632d5bd": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "283472910b683213": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "c9eb35b4e2f2ff7a": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "f1817dfa964692eb": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "5efadf8494fc2a07": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "5f80cd1a118d71f5": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "a7de603aedf68b5a": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "1022d43b45bb2d2a": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "2190c2f12f6a4e54": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "d1462978960fea64": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "c18fbd6b0b0b5108": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "b99d852e6da6f0d6": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "f05a9331db1dd5ee": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "f6f264f4a5487731": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "099673eb4491dec8": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "a84fb7584dac384c": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "3194ae22d7c3411e": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "8fe212bfe1cf0e63": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "08a95be26efc86c9": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "1b979212188baf02": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "469bb1eb485e6279": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "e123a58d6f42744a": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "ee8503c8da834daa": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "bb293e0dccfeb225": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "c9ae56523bf09b13": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "8375d8024bc4e2c0": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "2514fb1b4826d114": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "fdeb430b87d59d22": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "ab60e2584e1be14d": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "5d677a78efdc03d6": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "ef69485927853072": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "8582b799d6b24130": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "72ba54664edb9823": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "a3bac68b3657de5d": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "49848f6c935e21bb": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "c4a1e9b4bc69c14d": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "493fa578296e48b2": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "cbfdc4885d6e7f72": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "e143459a7d24671b": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "cf106d7e1893ed57": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "30e7ed5a6dfa9d9e": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "3d079656b0fa204d": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "d17c02839df446f3": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "2495e0734d7bc2de": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "50630e3c510ff938": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "d33a61dc49016d07": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "e5e1b4368e6a96ff": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "89234977938d1673": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "1eec2e21a3357c20": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "75c5371be608b7d5": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "5a0e34772362acbb": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "f5b8914776422faf": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "eb97c84dbd27821e": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "c2de8161836ac988": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "e29d0296a1caafe0": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "9b6a2acd35d10c95": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "9a7b3e876f5c306a": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "d568335bd473a5e8": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "e99409d83814d167": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "c574803279118978": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "391192c6da5b6df4": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "c059425b3b38da41": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "44b7287c53405492": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "fea139274ab5bde4": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "b4398754e963f82a": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "8e0bafe4616a5387": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "d08e47efb5acde16": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "9cb37e4fca5f5edf": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "0d1b6b5b8b472aca": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "d09291d26347227c": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "75c1efe35be46bc4": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "34eab3d6b67887c2": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "4df15600934d13ea": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "4af5d4d657142b17": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "ac2ac9e9b1bc6fd2": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "578dedeb72837b47": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "b90f9606ece9f3e7": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "2b87cf38d79a3fbc": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "1e5ed4a76bfc03ea": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "7d7b45b1cc914337": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "8a09a901ae7cb3c6": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "d7b5f82efc625ad8": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "37c7d2e5a7d9791b": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "10c8dc4d5610beaf": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "2de7745f3708093d": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "41fbc798b4e52266": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "18c0f80201e6ee69": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "9d7ffd6313e7016a": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "4879ce1cbab807d6": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "ebdc40bb9c1e0547": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "8111a2ab77fc1b47": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "d8324294c607d957": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "e1831604f1094cf4": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "d9ce1d925ab92655": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "dfcc510e049b7b9e": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "4c4edcf479179826": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "cc9ccbfd48aff2dc": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "b15a7f83ebfec1a1": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "f7c6a98d4330f52e": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "30d386aeee6d155e": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "8864c0cbe8f8c4fc": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "3f11d04c34da1d9c": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "c4a84c1fae3ffe18": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "152fceb913f45d8d": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "6e9be2cd849aaff1": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "09e7471291884624": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "e437b3d2cf0ea9a7": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "38e0cda8793807bc": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "c8f4e55ee88e6f2c": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "771ac3518216ebaa": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "b6638e098300ecca": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "fa6a1271ecdf24cb": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "367f6b089f58b885": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "f194a92be4249cb2": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "4b5c7ab54d00bd5d": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "830c311d94d9548b": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "bea543e88ce0af7a": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "d3dbe0571a47960f": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "a6b83bfdcaa6973c": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "f1adc3489ca49654": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "7798f61cae23a40e": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "bc6199644b94bc5d": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "53f9bf63ee28804d": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "afb37e5c8c20ca29": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "55122f23a6664935": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "f13f01512cfdc94b": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "b1589b93c39552ff": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "749a2de7e74e5753": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "092adb17ac1950bc": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "04a5eaa3990e9f13": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "04e49c6bcb0b6e20": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "ee0e1eb6690f2a24": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "2c4f8d8cffbd3751": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "18b9e8d061db4f21": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "74e4d3d6a98f5024": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "26428cd58c94d51b": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "a705631b4433d459": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "f91355e9afe538bb": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "079c3b76f628d641": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "bad55c7af596196e": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "a5e94d0a6f14273b": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "fb29e229cf7e6e33": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "b9b5eb109bacd0c6": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "429fe2e6847d40e1": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "a4f3a05d27e3868b": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "f3b57afefbaaaacf": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "cbd859acf8aaa31e": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "f155aee942a03171": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "873e2e7f4c195d35": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "00518e71155f12e2": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "633767eb68515e46": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "c384a1a1be40467b": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "014249fd30ab0b1c": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "669adca334df301d": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "83252e83e31fbe0a": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "2c7224dbf8a81c8e": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "0eeb64b967c017ad": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "beffc83925ece200": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "5ac288c800092b41": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "24c29551ec98303d": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "69671b47e3eda427": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "23719b5598af56cf": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "85374522badac50d": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "65728770869daef5": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "8a590e73aa1d059e": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "510a010f72cc3b36": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "53839f4b236d771a": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "b910627458411bae": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "0d085123580e6391": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "4d8d8b4527597308": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "8b7633c05eb07c82": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "7195dd764584b9c9": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "5338e8e2f06914fe": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "bfbcdf8148093c19": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "01a4dcea178025b8": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "6e0d9474a0c4e9a0": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "b19855dc2f1688e2": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "2f0998f2a97d397c": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "4e9ebc73a351e641": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "ee79efacb773ca11": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "4cf984ccfa04215d": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "ef9a75c72c7fe359": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "5c6ebbafb2d9a2c9": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "90b20d79fd33077b": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "78d76fa035587ad1": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "36b501a3586fe999": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "a28ec918a056bd8f": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "607a0059a68dc3a3": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "02fee7bdd9d90b72": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "b4bb70097e28fd50": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "9124f89b3b57a612": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "90df9b3354f66b07": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "06004045acb3584a": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "ebf1fe1b111be19f": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "13dd63a7320ef44d": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "2190b11ea0d01d84": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "deed510be32dfbf3": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "ea66de3f93f51283": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "a56cdc138880be72": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "f8ce851efb7da695": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "dc55e228f03850a1": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "b7a2bbbab3a6250d": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "794735bd026c00a1": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "f996af47cb6619cb": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "1474b68e3b408564": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "235fdd3512fcb874": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "802e84410f5c4c53": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "e195f27562e1c41c": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "07a000f11b5ea29c": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "7a812ae945eeca12": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "4a2157788f4a9308": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "4997596991c26307": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "73cb57abd72f2eba": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "673152607a377a45": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "31f6ba4cf131ae7d": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "9d2d234b076101e0": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "fc8d1c226f4c6143": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "1abffc136d03d42a": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "0e9a3cdf155606d3": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "1ecbfecf02132824": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "6654ea330b734dc1": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "afb83910b88ef952": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "5386954bfd27d776": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "6caeff4a0cbd52dc": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "a0ee384efaa7d4d8": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "47052bbe874ffce0": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "e46e1074ca9fb2be": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "168becbb4cf9f944": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "f3388e7d97bc5adf": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "7e33f24bf4965a85": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "267794a244de1101": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "0addd96aa649051b": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "56f3d070356e398f": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "a67092463e4cc388": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "da9918eecef29bcf": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "fab8932fe7a4fae4": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "aa7bca6635d29ef3": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "8aa3625345997464": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "0336f8243ae5a29b": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "3e2f268b76064f53": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "acd397c326911012": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "7cd88d367517078c": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "80dee022aec5cb19": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "3116711bf5846a2e": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "4e1edb8d5aa3d19a": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "a2f4ecdedd566115": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "178e3e5a00a01eac": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "e508c4e42d1b4928": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "2b51ca72ac0b7c18": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "35b97c7cc4ad3a38": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "29b129ecabfcfe23": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "278a85d9695cd9df": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "19b512cdf241de9a": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "cbd287679c89152b": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "8f971f39c7656d4b": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "1633a4227667fcf2": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "554f4ba2af2c5652": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "61e9a4abc70623f4": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "e1c0e481238dc9aa": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "929e735e3a1f6f0d": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "612b47e274f9965f": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "5159f2860cc88c93": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "914548e20a000257": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "0623b0c5c31c9079": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "6481e7dcd75adb24": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "3dceaa8fc6546ca0": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "d2eb98a34543ee58": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "bee4fe1922dd4c7c": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.375
+      ]
+    ],
+    "206e0ed5c11b922e": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "a5322d5ac8bd6550": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "181c14290c0b5bc0": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "c9c71bd30e252464": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "7b89388b4d19d0d7": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "5c2aa88ad2bc3e5b": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "54ce603f471e0b89": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "746b83be68760b06": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "b77af9b71177d55e": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "a8052110bc2925d2": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "88e27cff2d648095": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "7a69995ac5c7c11b": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "f1862b45046bd1ce": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "4a94e2dce5797438": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "d7fa1a3ec7925f83": [
+      [
+        0,
+        0.5
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "e69cfcff32580676": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "2ef4a31769644233": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "b00e2f3d467d4062": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "f2b5285a82ba6441": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "0b97a29d63bdd245": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "2cadddeb5378da0e": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "4a7600642bd861e0": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "b079202b62e8a7f0": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "2d61e35e32a6fdbb": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "b99e825a18702ce2": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "567519ad8198e46a": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "be025acabe4f7119": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "d17ac25f497cb1f4": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "f1c75f3c6f5a6499": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "aa972d252f745c55": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "285fa379d24dd278": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "f1d941327f8ce657": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "e7996bf42c79eac4": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "ee583ae806ecd690": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "2f16cb3a78f790d5": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "7b1e389be81309c8": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "89a80b1e5cd296c5": [
+      [
+        0,
+        0.625
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "4ff5dcdbb8c49727": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "60a0ae540c2cd66a": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "eefba3c033e3a829": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        0.625
+      ]
+    ],
+    "d17f39f2bde6d661": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.5
+      ]
+    ],
+    "de05060a026149a3": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "2d297d4e915e9215": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "a51195756dc58e19": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "f092a858a6868f84": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "d3b91704b118370b": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.25
+      ]
+    ],
+    "1f61c79056189e51": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "8ccd288ee608d2ae": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "b399c57e6f372380": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.0
+      ]
+    ],
+    "e825588848bc4f7f": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "5b34547c4e45037a": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "9c5b904bcb6cb00e": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.75
+      ]
+    ],
+    "0c69201e391230b2": [
+      [
+        0,
+        1.0
+      ],
+      [
+        20,
+        0.875
+      ]
+    ],
+    "2c1196f9077a0efa": [
+      [
+        0,
+        0.125
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "2ffbdec035af85b5": [
+      [
+        0,
+        0.25
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "899edad56c8c83e4": [
+      [
+        0,
+        0.875
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "ef9850fdd9148140": [
+      [
+        0,
+        0.375
+      ],
+      [
+        20,
+        1.0
+      ]
+    ],
+    "27ca332161533b31": [
+      [
+        0,
+        0.0
+      ],
+      [
+        20,
+        0.125
+      ]
+    ],
+    "d7b8acf56e40d499": [
+      [
+        0,
+        0.75
+      ],
+      [
+        20,
+        1.0
+      ]
+    ]
+  }
+}

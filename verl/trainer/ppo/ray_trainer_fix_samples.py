@@ -378,7 +378,6 @@ class OffPolicyManager:
 
             if samples and uid_stats and filter_func(uid_stats):
                 uid_to_samples[uid_str] = samples
-                # 取最新的一个作为代表用于生成
                 uid_to_representative_sample[uid_str] = samples[0]
                 # 计算该uid在buffer中所有samples的平均分数作为original_score
                 sample_scores = [sample.score for sample in samples]

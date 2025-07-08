@@ -742,10 +742,17 @@ algorithm:
     weight_pow: 2.0
 
   enable_off_policy_rollout: false
+
   enable_off_policy_samples: false
+
+  fix_max_size: true
+  
   initial_c_value: 0.4
+
   adaptive_c_freq: 10
+
   off_policy_update_freq: 10
+
   temp_dir: /data/wx_data/verl_tmp
 
 # config for the trainer

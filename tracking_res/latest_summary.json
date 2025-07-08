@@ -1,0 +1,80 @@
+{
+  "last_updated_step": 20,
+  "total_prompts": 496,
+  "improvement_rate": 0.4737903225806452,
+  "degradation_rate": 0.12096774193548387,
+  "top_5_improved": [
+    {
+      "prompt_hash": "1633a4227667fcf2",
+      "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nThe value of $y$ ...",
+      "baseline_acc": 0.0,
+      "current_acc": 0.75,
+      "improvement": 0.75
+    },
+    {
+      "prompt_hash": "2cadddeb5378da0e",
+      "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nDetermine the rem...",
+      "baseline_acc": 0.25,
+      "current_acc": 1.0,
+      "improvement": 0.75
+    },
+    {
+      "prompt_hash": "f3f218aa7693aecc",
+      "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nA curve is parame...",
+      "baseline_acc": 0.375,
+      "current_acc": 1.0,
+      "improvement": 0.625
+    },
+    {
+      "prompt_hash": "44b7287c53405492",
+      "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nThe average of Am...",
+      "baseline_acc": 0.375,
+      "current_acc": 1.0,
+      "improvement": 0.625
+    },
+    {
+      "prompt_hash": "4df15600934d13ea",
+      "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nThe smallest dist...",
+      "baseline_acc": 0.25,
+      "current_acc": 0.875,
+      "improvement": 0.625
+    }
+  ],
+  "top_5_degraded": [
+    {
+      "prompt_hash": "0ff7a4716e5d7746",
+      "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nSimplify: $\\frac{...",
+      "baseline_acc": 0.625,
+      "current_acc": 0.25,
+      "degradation": 0.375
+    },
+    {
+      "prompt_hash": "ec7b6b585cc5e8bb",
+      "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nA figure skater i...",
+      "baseline_acc": 0.5,
+      "current_acc": 0.125,
+      "degradation": 0.375
+    },
+    {
+      "prompt_hash": "6347bb078c3c9525",
+      "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nFor the eight cou...",
+      "baseline_acc": 0.875,
+      "current_acc": 0.5,
+      "degradation": 0.375
+    },
+    {
+      "prompt_hash": "a98102b1d02564d6",
+      "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nLet $F_1$ and $F_...",
+      "baseline_acc": 0.5,
+      "current_acc": 0.125,
+      "degradation": 0.375
+    },
+    {
+      "prompt_hash": "873e2e7f4c195d35",
+      "content": "system\nPlease reason step by step, and put your final answer within \\boxed{}.\nuser\nLet $a,$ $b,$ and...",
+      "baseline_acc": 0.5,
+      "current_acc": 0.125,
+      "degradation": 0.375
+    }
+  ]
+}

@@ -4,6 +4,9 @@ set -x
 # export VLLM_ATTENTION_BACKEND=XFORMERS
 
 export WANDB_MODE=offline
+export PYTHONWARNINGS="ignore::FutureWarning"
+
+
 MODEL_PATH=/data/wx_data/models/Qwen2.5-Math-1.5B
 TRAIN_DATA_PATH=/data/wx_data/datasets/DeepScaleR-Preview-Dataset/deepscaler_train.parquet
 VAL_DATA_PATH=/data/wx_data/datasets/DeepScaleR-Preview-Dataset/math.parquet
@@ -13,7 +16,8 @@ VAL_DATA_PATH=/data/wx_data/datasets/DeepScaleR-Preview-Dataset/math.parquet
 python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo_adaptive_filter \
     algorithm.enable_off_policy_samples=True \
-    algorithm.enable_off_policy_rollout=False \
+    algorithm.enable_off_policy_rollout=True \
+    algorithm.fix_max_size=True \
     algorithm.initial_c_value=0.15 \
     algorithm.adaptive_c_freq=1 \
     algorithm.off_policy_update_freq=20 \
@@ -48,7 +52,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='off_policy_grpo_debug' \
-    trainer.experiment_name='off-promote_itself-qwen_math1_5b-deepscaler_2k' \
+    trainer.experiment_name='off-promote_level-qwen_math1_5b-deepscaler_2k' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.save_freq=100 \
