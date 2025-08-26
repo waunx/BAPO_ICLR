@@ -21,8 +21,6 @@ import ray
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
 from verl.trainer.ppo.reward import load_reward_manager
 
-import warnings
-warnings.filterwarnings("ignore", category=FutureWarning, module="torch.distributed.fsdp")
 
 @hydra.main(config_path="config", config_name="ppo_trainer", version_base=None)
 def main(config):
@@ -194,16 +192,6 @@ class TaskRunner:
             if not config.algorithm.get("enable_off_policy_samples", False):
                 print("Warning: Using off policy advantage estimator but enable_off_policy_samples=False")
             
-            initial_c = config.algorithm.get("initial_c_value", 0.4)
-            if not (0.1 <= initial_c <= 0.7):
-                raise ValueError(f"initial_c_value must be in [0.1, 0.7], got {initial_c}")
-            
-            freq = config.algorithm.get("adaptive_c_frequency", 10)
-            if freq < 1:
-                raise ValueError(f"adaptive_c_frequency must be >= 1, got {freq}")
-            
-            print(f"✓ Adaptive filtering enabled: C={initial_c}, freq={freq}")
-
 
 def create_rl_dataset(data_paths, data_config, tokenizer, processor):
     """Create a dataset.

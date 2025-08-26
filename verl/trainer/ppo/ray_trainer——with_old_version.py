@@ -235,13 +235,13 @@ class OffPolicyManager_v1:
         self.buffer = OffPolicyGroupBuffer(
             max_samples_per_uid=config.algorithm.get("max_samples_per_uid", 16),
             max_scores_per_uid=config.algorithm.get("max_scores_per_uid", 16),
-            max_total_uids=config.algorithm.get("max_total_uids", 4096)
+            max_total_uids=config.algorithm.get("max_total_uids", 8192)
         )
 
 
         # Alpha policy checkpoint 
         self.alpha_checkpoint_path = None
-        self.temp_dir = config.algorithm.get("temp_dir", "/data/wx_data/tmp") 
+        self.temp_dir = config.algorithm.get("temp_dir", "/mnt/bn/robotics-rl-lf/verl_tmp") 
         os.makedirs(self.temp_dir, exist_ok=True)
         
         # C optimazer
@@ -651,6 +651,7 @@ class OffPolicyManager_v1:
         return metrics
     
 
+
 class OffPolicyManager:
     def __init__(self, config):
         self.config = config
@@ -658,8 +659,8 @@ class OffPolicyManager:
         self.alpha_update_freq = config.algorithm.get("off_policy_update_freq", 10)
         self.max_prompt_length = config.data.get("max_prompt_length", 1024)
         # 新的准确率区间策略
-        self.target_accuracy_range = (1/8, 4/8)  # 目标学习区间
-        self.buffer_accuracy_range = (0/8, 4/8)  # 缓存数据区间
+        self.target_accuracy_range = (4/8, 7/8)  # 目标学习区间
+        self.buffer_accuracy_range = (0/8, 3/8)  # 缓存数据区间
         self.promotion_threshold = (4/8, 7/8)    # 提升判断阈值
         
         self.step_count = 0
@@ -672,7 +673,7 @@ class OffPolicyManager:
 
         # Alpha policy checkpoint 
         self.alpha_checkpoint_path = None
-        self.temp_dir = config.algorithm.get("temp_dir", "/data/wx_data/verl_tmp") 
+        self.temp_dir = config.algorithm.get("temp_dir", "/mnt/bn/robotics-rl-lf/verl_tmp") 
         os.makedirs(self.temp_dir, exist_ok=True)
         
         # 记录提升统计
@@ -717,7 +718,7 @@ class OffPolicyManager:
             group_mean_score = np.mean(score_list)
             
             # 只将平均分数在1/8-3/8区间的group加入buffer
-            if self._is_in_buffer_range(group_mean_score) or self._is_in_target_range(group_mean_score):
+            if self._is_in_buffer_range(group_mean_score):
                 # 为这个group的所有samples添加到buffer
                 indices = uid_to_indices[uid_str]
                 for idx in indices:
@@ -761,7 +762,7 @@ class OffPolicyManager:
         for uid_str, samples in sampled_groups.items():
             all_samples.extend(samples)
         
-        # print(f"Sampled {len(all_samples)} samples from buffer for training")
+        print(f"Sampled {len(all_samples)} samples from buffer for training")
         return self._construct_dataproto_from_samples(all_samples)
     
     def get_available_groups_count(self) -> int:
@@ -793,18 +794,9 @@ class OffPolicyManager:
         uid_to_samples = {}
         uid_to_representative_sample = {}
         uid_to_original_mean_score = {}
-
-        def filter_func(stats):
-            mu_alpha = stats['mu_alpha']
-            mu_current = stats['mu_current']
-            
-            latest_score = mu_current if stats['current_count'] > 0 else mu_alpha
-            return self._is_in_buffer_range(latest_score)
         
         for uid_str, samples in self.buffer.sample_data.items():
-            uid_stats = self.buffer.get_uid_stats(uid_str)
-
-            if samples and uid_stats and filter_func(uid_stats):
+            if samples:  # 如果有样本
                 uid_to_samples[uid_str] = samples
                 # 取最新的一个作为代表用于生成
                 uid_to_representative_sample[uid_str] = samples[0]
@@ -910,7 +902,6 @@ class OffPolicyManager:
             all_scores = reward_tensor.sum(-1).cpu().numpy()
             promoted_sample_indices = []
             uids_to_remove = []
-            uids_to_promoted = []
             
             # 每个uid对应8个连续的responses（由于rollout.n=8）
             rollout_n = 8
@@ -919,19 +910,17 @@ class OffPolicyManager:
                 start_idx = i * rollout_n
                 end_idx = start_idx + rollout_n
                 group_scores = all_scores[start_idx:end_idx]
+                print("group_scores", group_scores)
                 group_mean_score = np.mean(group_scores)
                 
                 # 获取原始分数用于比较
                 original_score = uid_to_original_mean_score[uid_str]
                 
-                # if self._is_promoted(group_mean_score):
-                if group_mean_score > original_score:
+                if self._is_promoted(group_mean_score):
                     # 这个group被提升了，加入训练集 - 包含该group的所有8个responses
                     group_indices = list(range(start_idx, end_idx))
                     promoted_sample_indices.extend(group_indices)
-                    uids_to_promoted.append(uid_str)
-                    if not (self._is_in_buffer_range(group_mean_score) or self._is_in_target_range(group_mean_score)):
-                        uids_to_remove.append(uid_str)
+                    uids_to_remove.append(uid_str)
                     self.promotion_stats["successful_promotions"] += 1
                     print(f"✓ Group {uid_str[:8]} promoted: {original_score:.3f} -> {group_mean_score:.3f} (8 responses)")
                 else:
@@ -956,7 +945,23 @@ class OffPolicyManager:
                 promoted_indices = torch.tensor(promoted_sample_indices)
                 promoted_batch = reevaluated_full_batch.select_idxs(promoted_indices)
 
-                print(f"🎉 {len(uids_to_promoted)} groups ({len(promoted_sample_indices)} responses) promoted from buffer to training!")
+                # 添加调试信息：打印promoted_batch的维度
+                print(f"\n=== DEBUG: promoted_batch dimensions ===")
+                print(f"promoted_batch length: {len(promoted_batch)}")
+                print(f"promoted_sample_indices: {promoted_sample_indices}")
+                
+                for key, value in promoted_batch.batch.items():
+                    if torch.is_tensor(value):
+                        print(f"batch['{key}'].shape: {value.shape}")
+                    else:
+                        print(f"batch['{key}'] type: {type(value)}")
+                
+                for key, value in promoted_batch.non_tensor_batch.items():
+                    print(f"non_tensor_batch['{key}'] type: {type(value)}, length: {len(value) if hasattr(value, '__len__') else 'N/A'}")
+                
+                print("=" * 50)
+
+                print(f"🎉 {len(uids_to_remove)} groups ({len(promoted_sample_indices)} responses) promoted from buffer to training!")
                 return promoted_batch
             else:
                 print("No groups were promoted from buffer")
@@ -1081,6 +1086,7 @@ class OffPolicyManager:
                     
             if values:
                 tensor_data[key] = torch.stack(values)
+                print(f"tensor_data['{key}'].shape: {tensor_data[key].shape}")
         
         for key in non_tensor_keys:
             values = []
@@ -1130,6 +1136,7 @@ class OffPolicyManager:
                     
             if values:
                 tensor_data[key] = torch.stack(values)
+                print(f"tensor_data['{key}'].shape: {tensor_data[key].shape}")
         
         for key in non_tensor_keys:
             values = []
@@ -3345,7 +3352,6 @@ class RayPPOTrainer:
                             # 7.4. Combine Batch
                             if len(batches_to_combine) > 1:
                                 final_batch = DataProto.concat(batches_to_combine)
-                                final_batch.batch["filtering_mask"] = self.off_policy_manager.compute_filtering_mask(final_batch)
                                 print(f"🎯 Final training batch: {len(final_batch)} samples total")
                             elif len(batches_to_combine) == 1:
                                 final_batch = batches_to_combine[0]
@@ -3427,22 +3433,22 @@ class RayPPOTrainer:
                 off_policy_metrics = self.off_policy_manager.get_metrics()
                 metrics.update(off_policy_metrics)
                 
-                # if self.off_policy_manager.enable_off_policy:
+                if self.off_policy_manager.enable_off_policy:
                     
-                #     scores = batch.batch["token_level_scores"].sum(dim=-1).cpu().numpy()
+                    scores = batch.batch["token_level_scores"].sum(dim=-1).cpu().numpy()
                     
-                #     buffer_range_count = sum(1 for s in scores if 1/8 <= s <= 3/8)
-                #     target_range_count = sum(1 for s in scores if 4/8 <= s <= 7/8)
-                #     high_range_count = sum(1 for s in scores if s > 7/8)
-                #     low_range_count = sum(1 for s in scores if s < 1/8)
+                    buffer_range_count = sum(1 for s in scores if 1/8 <= s <= 3/8)
+                    target_range_count = sum(1 for s in scores if 4/8 <= s <= 7/8)
+                    high_range_count = sum(1 for s in scores if s > 7/8)
+                    low_range_count = sum(1 for s in scores if s < 1/8)
                     
-                #     metrics.update({
-                #         "training/buffer_range_samples": buffer_range_count,    # 1/8-3/8
-                #         "training/target_range_samples": target_range_count,    # 4/8-7/8  
-                #         "training/high_range_samples": high_range_count,        # >7/8
-                #         "training/low_range_samples": low_range_count,          # <1/8
-                #         "training/total_training_samples": len(batch),
-                #     })
+                    metrics.update({
+                        "training/buffer_range_samples": buffer_range_count,    # 1/8-3/8
+                        "training/target_range_samples": target_range_count,    # 4/8-7/8  
+                        "training/high_range_samples": high_range_count,        # >7/8
+                        "training/low_range_samples": low_range_count,          # <1/8
+                        "training/total_training_samples": len(batch),
+                    })
 
                 # collect metrics
                 metrics.update(compute_data_metrics(batch=batch, use_critic=self.use_critic))

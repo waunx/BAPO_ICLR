@@ -273,12 +273,12 @@ class vLLMRollout(BaseRollout):
                 "top_k": self.config.val_kwargs.top_k,
                 "top_p": self.config.val_kwargs.top_p,
                 "temperature": self.config.val_kwargs.temperature,
-                "n": self.config.val_kwargs.n,  # if validate, already repeat in ray_trainer
+                "n": 1,  # if validate, already repeat in ray_trainer
             }
         elif is_re_rollout:
             # [wx] For re-evaluate 
             kwargs = {
-                "n": 2 * self.config.val_kwargs.n,  
+                "n": 8,  
             }
 
         lora_requests = None

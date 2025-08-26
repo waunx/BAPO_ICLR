@@ -224,7 +224,7 @@ class vLLMRollout(BaseRollout):
         elif is_re_rollout:
             # [wx] For re-evaluate, the 
             kwargs = {
-                "n": 1,  
+                "n": 8,  
             }
         lora_requests = None
         if self.lora_kwargs:

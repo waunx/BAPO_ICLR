@@ -80,7 +80,7 @@ class AdvantageEstimator(str, Enum):
     GRPO_PASSK = "grpo_passk"
     GRPO_OFF_POLICY = "grpo_off_policy"
     GRPO_ADAPTIVE_FILTER = "grpo_adaptive_filter"
-
+    GRPO_OFF_POLICY_IS = "grpo_off_policy_is" 
 
 class AdaptiveKLController:
     """
@@ -555,17 +555,17 @@ def compute_grpo_adaptive_filter_advantage(
         return advantages, advantages
     
     filtered_rewards = token_level_rewards[filtered_indices]
-    filtered_mask = response_mask[filtered_indices] 
+    filtered_response_mask = response_mask[filtered_indices] 
     filtered_index = index[filtered_indices]
     
     if off_policy_stats is not None:
         advantages, returns = compute_grpo_off_policy_advantage(
-            filtered_rewards, filtered_mask, filtered_index, 
+            filtered_rewards, filtered_response_mask, filtered_index, 
             off_policy_stats, epsilon, norm_adv_by_std_in_grpo, config
         )
     else:
         advantages, returns = compute_grpo_outcome_advantage(
-            filtered_rewards, filtered_mask, filtered_index, 
+            filtered_rewards, filtered_response_mask, filtered_index, 
             epsilon, norm_adv_by_std_in_grpo
         )
     
@@ -831,3 +831,117 @@ def compute_pf_ppo_reweight_data(
     resampled_data.meta_info = resampled_meta_info
 
     return resampled_data
+
+
+def compute_importance_weights(current_log_probs: torch.Tensor, 
+                             rollout_log_probs: torch.Tensor,
+                             response_mask: torch.Tensor,
+                             clip_ratio: float = 10.0,
+                             normalize: bool = True) -> torch.Tensor:
+    """计算重要性采样权重"""
+    # 计算log重要性权重 (仅在response部分)
+    log_importance_weights = (current_log_probs - rollout_log_probs) * response_mask
+    
+    # 对每个序列求和得到总的log权重
+    log_importance_weights_sum = log_importance_weights.sum(dim=-1)  # [batch_size]
+    
+    # 转换为实际权重
+    importance_weights = torch.exp(log_importance_weights_sum)
+    
+    # 裁剪权重防止过大值导致训练不稳定
+    if clip_ratio > 0:
+        importance_weights = torch.clamp(importance_weights, 
+                                       min=1.0/clip_ratio, 
+                                       max=clip_ratio)
+    
+    # 归一化权重
+    if normalize:
+        importance_weights = importance_weights / importance_weights.mean()
+    
+    return importance_weights
+
+
+@register_adv_est(AdvantageEstimator.GRPO_OFF_POLICY_IS)
+def compute_grpo_off_policy_importance_sampling_advantage(
+    token_level_rewards: torch.Tensor,
+    response_mask: torch.Tensor,
+    index: np.ndarray,
+    current_log_probs: torch.Tensor,
+    rollout_log_probs: torch.Tensor,
+    epsilon: float = 1e-6,
+    norm_adv_by_std_in_grpo: bool = True,
+    config=None,
+    **kwargs,
+):
+    """
+    使用重要性采样的GRPO优势计算
+    
+    Args:
+        token_level_rewards: token级别奖励 [batch_size, seq_len]
+        response_mask: 响应mask [batch_size, seq_len]
+        index: 样本索引/uid用于分组
+        current_log_probs: 当前策略log概率 [batch_size, seq_len]
+        rollout_log_probs: 采样策略log概率 [batch_size, seq_len]
+        epsilon: 数值稳定性参数
+        norm_adv_by_std_in_grpo: 是否按标准差归一化
+        config: 算法配置
+    
+    Returns:
+        advantages: 计算的优势 [batch_size, seq_len]
+        returns: 计算的回报 [batch_size, seq_len]
+    """
+    # 计算重要性权重
+    clip_ratio = config.get("importance_clip_ratio", 10.0) if config else 10.0
+    normalize = config.get("normalize_importance_weights", True) if config else True
+    
+    importance_weights = compute_importance_weights(
+        current_log_probs, rollout_log_probs, response_mask,
+        clip_ratio=clip_ratio, normalize=normalize
+    )
+    
+    # 计算序列级奖励
+    scores = token_level_rewards.sum(dim=-1)
+    
+    # 按组计算加权优势
+    id2score = defaultdict(list)
+    id2weight = defaultdict(list)
+    id2mean = {}
+    id2std = {}
+    
+    with torch.no_grad():
+        bsz = scores.shape[0]
+        for i in range(bsz):
+            id2score[index[i]].append(scores[i])
+            id2weight[index[i]].append(importance_weights[i])
+        
+        for idx in id2score:
+            group_scores = torch.tensor(id2score[idx])
+            group_weights = torch.tensor(id2weight[idx])
+            
+            if len(group_scores) == 1:
+                id2mean[idx] = torch.tensor(0.0)
+                id2std[idx] = torch.tensor(1.0)
+            else:
+                # 使用重要性权重计算加权平均和标准差
+                weighted_sum = (group_scores * group_weights).sum()
+                weight_sum = group_weights.sum()
+                id2mean[idx] = weighted_sum / weight_sum
+                
+                if norm_adv_by_std_in_grpo:
+                    # 计算加权标准差
+                    weighted_var = ((group_scores - id2mean[idx]) ** 2 * group_weights).sum() / weight_sum
+                    id2std[idx] = torch.sqrt(weighted_var)
+                else:
+                    id2std[idx] = torch.tensor(1.0)
+        
+        # 应用重要性权重的优势
+        for i in range(bsz):
+            if norm_adv_by_std_in_grpo:
+                scores[i] = (scores[i] - id2mean[index[i]]) / (id2std[index[i]] + epsilon) * importance_weights[i]
+            else:
+                scores[i] = (scores[i] - id2mean[index[i]]) * importance_weights[i]
+        
+        scores = scores.unsqueeze(-1) * response_mask
+
+    return scores, scores
+

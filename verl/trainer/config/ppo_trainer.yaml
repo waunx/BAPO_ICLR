@@ -171,6 +171,10 @@ actor_rollout_ref:
     # Upper bound for asymmetric clipping (used in dual-clip PPO)
     clip_ratio_high: 0.2
     
+    lambda_1: 1.0 # re-eval promoted batch weight
+
+    lambda_2: 1.0 # target completion batch weight
+    
     # Constant C in Dual-clip PPO; clips when advantage < -C
     clip_ratio_c: 3.0
     
@@ -355,7 +359,7 @@ actor_rollout_ref:
     tensor_model_parallel_size: 2
 
     # max number of tokens in a batch
-    max_num_batched_tokens: 8192
+    max_num_batched_tokens: 10240
 
     # max length for rollout
     max_model_len: null
@@ -745,15 +749,35 @@ algorithm:
 
   enable_off_policy_samples: false
 
+  enable_off_policy_reeval: false
+
+  enable_completion_batch: true
+  enable_multi_level_downsampling: false
+
+  enable_adaptive_target_range: false
+
+  importance_clip_ratio: 10.0         
+  normalize_importance_weights: true   
+
+
+  # Method for current batch filter: "gaussian", "range", or "uniform"
+  train_batch_filter: gaussian
+
+
   fix_max_size: true
   
-  initial_c_value: 0.4
-
-  adaptive_c_freq: 10
-
   off_policy_update_freq: 10
 
-  temp_dir: /data/wx_data/verl_tmp
+  off_policy_reeval_freq: 1
+
+  max_total_uids: 256
+
+  max_scores_per_uid: 32
+
+  max_samples_per_uid: 8
+
+  max_reeval_ids: 256
+
 
 # config for the trainer
 trainer:
@@ -777,7 +801,7 @@ trainer:
   logger: [ 'console', 'wandb' ]
 
   # Number of generations to log during validation
-  log_val_generations: 0
+  log_val_generations: 1
 
   # Directory for logging rollout data; no dump if null
   rollout_data_dir: null
@@ -819,7 +843,7 @@ trainer:
   del_local_ckpt_after_load: False
 
   # Default local directory for saving checkpoints
-  default_local_dir: checkpoints/${trainer.project_name}/${trainer.experiment_name}
+  default_local_dir: /data/wx_data/ckpts/${trainer.project_name}/${trainer.experiment_name}
 
   # Maximum number of actor checkpoints to keep
   max_actor_ckpt_to_keep: null
@@ -837,7 +861,7 @@ trainer:
   prompt_tracking:
 
     enable: True
-    save_dir: "/data/wx_data/offpolicy_GRPO/tracking_res" 
+    save_dir: "./prompt_tracking_results" 
     track_top_k_improved: 50
     track_top_k_degraded: 20
 
