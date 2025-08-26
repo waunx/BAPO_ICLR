@@ -272,8 +272,7 @@ class vLLMRollout(BaseRollout):
             kwargs = {
                 "top_k": self.config.val_kwargs.top_k,
                 "top_p": self.config.val_kwargs.top_p,
-                "temperature": self.config.val_kwargs.temperature,
-                "n": 1,  # if validate, already repeat in ray_trainer
+                "n": 1, 
             }
         elif is_re_rollout:
             # [wx] For re-evaluate 
@@ -315,12 +314,29 @@ class vLLMRollout(BaseRollout):
             rollout_log_probs = pad_2d_list_to_length(rollout_log_probs, -1, max_length=self.config.response_length).to(idx.device)
             rollout_log_probs = rollout_log_probs.to(torch.float32)
 
+            # if self.sampling_params.n > 1 and do_sample:
+            #     idx = _repeat_interleave(idx, self.sampling_params.n)
+            #     attention_mask = _repeat_interleave(attention_mask, self.sampling_params.n)
+            #     position_ids = _repeat_interleave(position_ids, self.sampling_params.n)
+            #     batch_size = batch_size * self.sampling_params.n
+                
+            #     # 【修复】：重复所有相关的非张量数据，确保多模态数据也被正确处理
+            #     keys_to_repeat = ["tools_kwargs", "multi_modal_data", "raw_prompt"]  # 添加可能需要重复的keys
+            #     for key in keys_to_repeat:
+            #         if key in non_tensor_batch.keys():
+            #             non_tensor_batch[key] = _repeat_interleave(non_tensor_batch[key], self.sampling_params.n)
+            #             print(f"Repeated {key} for n={self.sampling_params.n} samples")
+
             if self.sampling_params.n > 1 and do_sample:
                 idx = _repeat_interleave(idx, self.sampling_params.n)
                 attention_mask = _repeat_interleave(attention_mask, self.sampling_params.n)
                 position_ids = _repeat_interleave(position_ids, self.sampling_params.n)
                 batch_size = batch_size * self.sampling_params.n
                 # NOTE(linjunrong): for multi-turn https://github.com/volcengine/verl/pull/1037
+                # keys_to_repeat = ["tools_kwargs", "multi_modal_data"]
+                # for key in keys_to_repeat:
+                #     if key in non_tensor_batch.keys():
+                #         non_tensor_batch[key] = _repeat_interleave(non_tensor_batch[key], self.sampling_params.n)
                 if "tools_kwargs" in non_tensor_batch.keys():
                     non_tensor_batch["tools_kwargs"] = _repeat_interleave(non_tensor_batch["tools_kwargs"], self.sampling_params.n)
 

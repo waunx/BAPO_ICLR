@@ -222,7 +222,7 @@ class vLLMRollout(BaseRollout):
                 "n": 1,  # if validate, already repeat in ray_trainer
             }
         elif is_re_rollout:
-            # [wx] For re-evaluate, the 
+            # [wx] For re-evaluate 
             kwargs = {
                 "n": 8,  
             }
@@ -258,6 +258,20 @@ class vLLMRollout(BaseRollout):
                 attention_mask = attention_mask.repeat_interleave(self.sampling_params.n, dim=0)
                 position_ids = position_ids.repeat_interleave(self.sampling_params.n, dim=0)
                 batch_size = batch_size * self.sampling_params.n
+                
+            # if self.sampling_params.n > 1 and do_sample:
+            #     idx = _repeat_interleave(idx, self.sampling_params.n)
+            #     attention_mask = _repeat_interleave(attention_mask, self.sampling_params.n)
+            #     position_ids = _repeat_interleave(position_ids, self.sampling_params.n)
+            #     batch_size = batch_size * self.sampling_params.n
+                
+            #     # 【修复】：重复所有相关的非张量数据，确保多模态数据也被正确处理
+            #     keys_to_repeat = ["tools_kwargs", "multi_modal_data", "raw_prompt"]  # 添加可能需要重复的keys
+            #     for key in keys_to_repeat:
+            #         if key in non_tensor_batch.keys():
+            #             non_tensor_batch[key] = _repeat_interleave(non_tensor_batch[key], self.sampling_params.n)
+            #             print(f"Repeated {key} for n={self.sampling_params.n} samples")
+
             seq = torch.cat([idx, response], dim=-1)
 
         response_length = response.size(1)

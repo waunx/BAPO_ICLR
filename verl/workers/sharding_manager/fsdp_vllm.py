@@ -99,6 +99,55 @@ class FSDPVLLMShardingManager(BaseShardingManager):
         if is_version_ge(pkg="vllm", minver="0.7.3"):
             VLLMHijack.hijack()
 
+        # [wx] Whether to update vLLM parameters
+        self._should_update_params = True
+        self._last_update_step = -1
+
+        self._temp_override = None  # None, True, False
+        self._saved_state = None
+    
+    def save_state(self):
+        """保存当前状态"""
+        self._saved_state = {
+            'should_update_params': self._should_update_params,
+            'last_update_step': self._last_update_step,
+            'temp_override': self._temp_override
+        }
+        
+    def restore_state(self):
+        """恢复保存的状态"""
+        if self._saved_state is not None:
+            self._should_update_params = self._saved_state['should_update_params']
+            self._last_update_step = self._saved_state['last_update_step']
+            self._temp_override = self._saved_state['temp_override']
+            self._saved_state = None
+            
+    def set_temp_override(self, should_update: bool):
+        """设置临时覆盖"""
+        if self._saved_state is None:
+            self.save_state()
+        self._temp_override = should_update
+        
+    def clear_temp_override(self):
+        """清除临时覆盖并恢复状态"""
+        self._temp_override = None
+        self.restore_state()
+    
+    @property
+    def effective_should_update_params(self):
+        """获取有效的参数更新标志（考虑临时覆盖）"""
+        if self._temp_override is not None:
+            return self._temp_override
+        return self._should_update_params
+    
+    def set_param_update_control(self, should_update: bool, current_step: int = None):
+        """控制是否在下次__enter__时更新vLLM参数"""
+        if self._temp_override is None:  # 只在没有临时覆盖时才更新
+            self._should_update_params = should_update
+            if current_step is not None:
+                self._last_update_step = current_step
+                
+
     @GPUMemoryLogger(role="fsdp vllm sharding_manager", logger=logger)
     def __enter__(self):
         def __collect_lora_params() -> OrderedDict:
@@ -174,12 +223,11 @@ class FSDPVLLMShardingManager(BaseShardingManager):
             # Copy, not share memory
             load_format = "hf" if self.full_params else "dtensor"
 
-            if vllm_version in (
-                "0.5.4",
-                "0.6.3",
-            ):
-                self.inference_engine.sync_model_weights(params, load_format=load_format)
-                log_gpu_memory_usage("After sync model weights in sharding manager", logger=logger)
+            should_update = self.effective_should_update_params
+            if vllm_version in ("0.5.4", "0.6.3"):
+                if should_update:
+                    self.inference_engine.sync_model_weights(params, load_format=load_format)
+                    log_gpu_memory_usage("After sync model weights in sharding manager", logger=logger)
                 del params
             else:
                 if "tags" in inspect.signature(self.inference_engine.wake_up).parameters:
@@ -187,16 +235,41 @@ class FSDPVLLMShardingManager(BaseShardingManager):
                 else:
                     self.inference_engine.wake_up()
 
-                # update model params
-                self.update_params(params, peft_config=peft_config)
-                log_gpu_memory_usage("After sync model weights in sharding manager", logger=logger)
+                if should_update:
+                    self.update_params(params, peft_config=peft_config)
+                    log_gpu_memory_usage("After sync model weights in sharding manager", logger=logger)
                 del params
+
                 if self.offload_param:
                     offload_fsdp_model_to_cpu(self.module)
                 get_torch_device().empty_cache()
 
                 if "tags" in inspect.signature(self.inference_engine.wake_up).parameters:
                     self.inference_engine.wake_up(tags=["kv_cache"])
+
+            # if vllm_version in (
+            #     "0.5.4",
+            #     "0.6.3",
+            # ):
+            #     self.inference_engine.sync_model_weights(params, load_format=load_format)
+            #     log_gpu_memory_usage("After sync model weights in sharding manager", logger=logger)
+            #     del params
+            # else:
+            #     if "tags" in inspect.signature(self.inference_engine.wake_up).parameters:
+            #         self.inference_engine.wake_up(tags=["weights"])
+            #     else:
+            #         self.inference_engine.wake_up()
+
+            #     # update model params
+            #     self.update_params(params, peft_config=peft_config)
+            #     log_gpu_memory_usage("After sync model weights in sharding manager", logger=logger)
+            #     del params
+            #     if self.offload_param:
+            #         offload_fsdp_model_to_cpu(self.module)
+            #     get_torch_device().empty_cache()
+
+            #     if "tags" in inspect.signature(self.inference_engine.wake_up).parameters:
+            #         self.inference_engine.wake_up(tags=["kv_cache"])
 
             log_gpu_memory_usage("After del state_dict and empty_cache in sharding manager", logger=logger)
 

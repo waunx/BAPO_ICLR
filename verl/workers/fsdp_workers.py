@@ -376,6 +376,75 @@ class ActorRolloutRefWorker(Worker):
 
         return actor_module_fsdp, actor_optimizer, actor_lr_scheduler, actor_model_config
 
+    @register(dispatch_mode=Dispatch.ONE_TO_ALL)
+    def save_rollout_state(self):
+        """保存rollout的当前状态"""
+        if hasattr(self, 'rollout_sharding_manager') and self.rollout_sharding_manager is not None:
+            self.rollout_sharding_manager.save_state()
+            print("[Worker] Rollout state saved")
+            return True
+        else:
+            print("Warning: No rollout_sharding_manager found for state saving")
+            return False
+
+    @register(dispatch_mode=Dispatch.ONE_TO_ALL)
+    def restore_rollout_state(self):
+        """恢复rollout的保存状态"""
+        if hasattr(self, 'rollout_sharding_manager') and self.rollout_sharding_manager is not None:
+            self.rollout_sharding_manager.restore_state()
+            print("[Worker] Rollout state restored")
+            return True
+        else:
+            print("Warning: No rollout_sharding_manager found for state restoration")
+            return False
+
+    @register(dispatch_mode=Dispatch.ONE_TO_ALL)
+    def set_temp_current_policy(self):
+        """临时设置为使用current policy"""
+        if hasattr(self, 'rollout_sharding_manager') and self.rollout_sharding_manager is not None:
+            self.rollout_sharding_manager.set_temp_override(should_update=True)
+            print("[Worker] Temporarily set to current policy")
+            return True
+        else:
+            print("Warning: No rollout_sharding_manager found for temp override")
+            return False
+
+    @register(dispatch_mode=Dispatch.ONE_TO_ALL) 
+    def clear_temp_policy_override(self):
+        """清除临时policy覆盖并恢复原状态"""
+        if hasattr(self, 'rollout_sharding_manager') and self.rollout_sharding_manager is not None:
+            self.rollout_sharding_manager.clear_temp_override()
+            print("[Worker] Temp policy override cleared, state restored")
+            return True
+        else:
+            print("Warning: No rollout_sharding_manager found for clearing override")
+            return False
+
+    @register(dispatch_mode=Dispatch.ONE_TO_ALL)
+    def set_param_update_control(self, should_update: bool, current_step: int = None):
+        """设置rollout sharding manager的参数更新控制"""
+        if hasattr(self, 'rollout_sharding_manager') and self.rollout_sharding_manager is not None:
+            self.rollout_sharding_manager.set_param_update_control(should_update, current_step)
+            policy_type = "current" if should_update else "alpha"
+            print(f"[Worker] Set to use {policy_type} policy for generation")
+            return True
+        else:
+            print("Warning: No rollout_sharding_manager found")
+            return False
+
+    @register(dispatch_mode=Dispatch.ONE_TO_ALL)
+    def get_param_update_status(self):
+        """获取当前的参数更新状态"""
+        if hasattr(self, 'rollout_sharding_manager') and self.rollout_sharding_manager is not None:
+            return {
+                'should_update': self.rollout_sharding_manager.effective_should_update_params,
+                'last_update_step': self.rollout_sharding_manager._last_update_step,
+                'has_temp_override': self.rollout_sharding_manager._temp_override is not None,
+                'temp_override_value': self.rollout_sharding_manager._temp_override
+            }
+        return None
+
+
     def _build_rollout(self, trust_remote_code=False):
         from torch.distributed.device_mesh import init_device_mesh
 
@@ -469,7 +538,10 @@ class ActorRolloutRefWorker(Worker):
         else:
             raise NotImplementedError(f"Rollout name: {self.config.rollout.name} is not supported")
 
+        self._rollout_sharding_manager = rollout_sharding_manager
+
         return rollout, rollout_sharding_manager
+
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
     def init_model(self):

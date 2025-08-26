@@ -705,7 +705,7 @@ class DataProto:
         non_tensor_batch = list_of_dict_to_dict_of_list(list_of_dict=[d.non_tensor_batch for d in data])
         for key, val in non_tensor_batch.items():
             non_tensor_batch[key] = np.concatenate(val, axis=0)
-
+    
         cls = type(data[0]) if len(data) > 0 else DataProto
         return cls(batch=new_batch, non_tensor_batch=non_tensor_batch, meta_info=data[0].meta_info)
 
