@@ -323,7 +323,7 @@ class DataParallelPPOActor(BasePPOActor):
         temperature = data.meta_info["temperature"]
         multi_turn = data.meta_info.get("multi_turn", False)
 
-        select_keys = ["responses", "input_ids", "attention_mask", "position_ids", "old_log_probs", "advantages", "batch_sources"]
+        select_keys = ["responses", "input_ids", "attention_mask", "position_ids", "old_log_probs", "advantages", "batch_sources", 'clip_center']
         if multi_turn:
             select_keys.append("loss_mask")
         if self.config.use_kl_loss:
@@ -331,17 +331,15 @@ class DataParallelPPOActor(BasePPOActor):
         batch = data.select(batch_keys=select_keys).batch
         has_multi_modal_inputs = "multi_modal_inputs" in data.non_tensor_batch.keys()
 
-        # 【关键】：在开始时就计算各类型样本的分布和权重
+
         all_batch_sources = batch["batch_sources"]
         lambda_1 = getattr(self.config, 'lambda_1', 1.0)
         lambda_2 = getattr(self.config, 'lambda_2', 1.0)
         
-        # 计算全局权重
         global_sample_weights = torch.ones_like(all_batch_sources, dtype=torch.float)
         global_sample_weights[all_batch_sources == 1] = lambda_1  # promoted
         global_sample_weights[all_batch_sources == 2] = lambda_2  # target
         
-        # 添加权重信息到batch中
         batch["sample_weights"] = global_sample_weights
         select_keys.append("sample_weights")
         data.batch["sample_weights"] = global_sample_weights 
@@ -356,7 +354,6 @@ class DataParallelPPOActor(BasePPOActor):
 
         metrics = {}
         
-        # 全局统计 - 使用分布式聚合
         total_loss_by_type = torch.zeros(3, device=get_torch_device().current_device())  # [current, promoted, target]
         total_samples_by_type = torch.zeros(3, device=get_torch_device().current_device())  # [current, promoted, target]
         
@@ -393,6 +390,7 @@ class DataParallelPPOActor(BasePPOActor):
                     else:
                         response_mask = attention_mask[:, -response_length:]
 
+                    clip_center = data_dict["clip_center"]
                     old_log_prob = data_dict["old_log_probs"]
                     advantages = data_dict["advantages"]
                     batch_sources = data_dict["batch_sources"]
@@ -411,12 +409,12 @@ class DataParallelPPOActor(BasePPOActor):
                         calculate_entropy = True
                     entropy, log_prob = self._forward_micro_batch(micro_batch=data_dict, temperature=temperature, calculate_entropy=calculate_entropy)
 
-                    # 【关键修改】：使用加权advantages进行训练
                     weighted_advantages = advantages * sample_weights.unsqueeze(-1)
                     
                     pg_loss, pg_clipfrac, ppo_kl, pg_clipfrac_lower = compute_policy_loss(
                         old_log_prob=old_log_prob,
                         log_prob=log_prob,
+                        clip_center=clip_center,
                         advantages=weighted_advantages,
                         response_mask=response_mask,
                         cliprange=clip_ratio,
@@ -426,7 +424,6 @@ class DataParallelPPOActor(BasePPOActor):
                         loss_agg_mode=loss_agg_mode,
                     )
 
-                    # 【关键修改】：为每种类型的样本单独计算loss（用于统计）
                     for source_type in range(3):
                         type_mask = (batch_sources == source_type)
                         if torch.sum(type_mask) > 0:
@@ -435,7 +432,8 @@ class DataParallelPPOActor(BasePPOActor):
                                 type_pg_loss, _, _, _ = compute_policy_loss(
                                     old_log_prob=old_log_prob,
                                     log_prob=log_prob,
-                                    advantages=advantages,  # 注意：这里用原始advantages，不用权重
+                                    clip_center=clip_center,
+                                    advantages=advantages, 
                                     response_mask=type_response_mask,
                                     cliprange=clip_ratio,
                                     cliprange_low=clip_ratio_low,

@@ -1,7 +1,6 @@
 # Copyright 2024 Bytedance Ltd. and/or its affiliates
 # Copyright 2023-2024 SGLang Team
 # Copyright 2025 ModelBest Inc. and/or its affiliates
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -14,8 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-FSDP PPO Trainer with Ray-based single controller.
-This trainer supports model-agonistic model initialization with huggingface
+FSDP PPO-style (PPO GRPO BAPO) Trainer with Ray-based single controller.
 """
 
 import json
@@ -35,6 +33,7 @@ from typing import Union, List
 
 
 import hashlib
+import base64
 
 import numpy as np
 import ray
@@ -82,8 +81,8 @@ class OffPolicyDataSample:
     def __init__(self, uid: str, score: float, is_alpha: bool, sample_data: dict):
         self.uid = uid
         self.score = score
-        self.is_alpha = is_alpha
-        self.sample_data = sample_data  # For advantage
+        self.is_alpha = is_alpha 
+        self.sample_data = sample_data  
         self.timestamp = time.time()
     
     def to_dict(self):
@@ -105,13 +104,13 @@ class OffPolicyGroupBuffer:
         self.max_scores_per_uid = max_scores_per_uid
         self.max_total_uids = max_total_uids
         
-        self.alpha_scores = defaultdict(list)  # {uid_str: [score1, score2, ...]}
-        self.current_scores = defaultdict(list)  # {uid_str: [score1, score2, ...]}
-        self.sample_data = defaultdict(list)  # {uid_str: [OffPolicyDataSample, ...]}
+        self.alpha_scores = defaultdict(list)  # {u_i: [r_i^i, r_i^2, ...]}
+        self.current_scores = defaultdict(list)  # {u_i: [r_i^i, r_i^2, ...]}
+        self.sample_data = defaultdict(list)  # {u_i: [OffPolicyDataSample, OffPolicyDataSample, ...]}
         
         self.uid_order = [] 
     
-    def add_score(self, uid_str: str, scores: Union[float, List[float]], is_alpha: bool):
+    def add_score(self, uid_str: str, scores: Union[float, List[float]], is_alpha: bool, target_range=None, buffer_range=None):
         """
         Add scores to the buffer.
         
@@ -119,11 +118,9 @@ class OffPolicyGroupBuffer:
             uid_str: UID string
             scores: Scores, can be a single score or a list of scores
             is_alpha: Whether the scores come from the alpha policy
+            target_range: Current target accuracy range from OffPolicyManager
+            buffer_range: Current buffer accuracy range from OffPolicyManager
         """
-        # if uid_str in self.uid_order:
-        #     self.uid_order.remove(uid_str)
-        # self.uid_order.append(uid_str)
-        
         if isinstance(scores, (int, float)):
             scores = [scores]
         
@@ -138,9 +135,16 @@ class OffPolicyGroupBuffer:
                 excess = len(self.current_scores[uid_str]) - self.max_scores_per_uid
                 self.current_scores[uid_str] = self.current_scores[uid_str][excess:]
         
-        self._check_and_evict()
-    
-    def add_sample(self, uid_str: str, sample: OffPolicyDataSample):
+    def add_sample(self, uid_str: str, sample: OffPolicyDataSample, target_range=None, buffer_range=None):
+        """
+        Add sample to buffer.
+        
+        Args:
+            uid_str: UID string  
+            sample: OffPolicyDataSample instance
+            target_range: Current target accuracy range from OffPolicyManager
+            buffer_range: Current buffer accuracy range from OffPolicyManager
+        """
         if uid_str in self.uid_order:
             self.uid_order.remove(uid_str)
         self.uid_order.append(uid_str)
@@ -150,38 +154,114 @@ class OffPolicyGroupBuffer:
         if len(self.sample_data[uid_str]) > self.max_samples_per_uid:
             self.sample_data[uid_str].pop(0)
         
-        self._check_and_evict()
+        self._check_and_evict(target_range=target_range, buffer_range=buffer_range)
+
     
-    def _check_and_evict(self):
+
+    def _check_and_evict(self, target_range=None, buffer_range=None):
+        """
+        Evict UIDs when buffer exceeds capacity. Ensure each category (difficult buffer & high-quality buffer) <= max_total_uids/2.
+        """
+        total_uids = len(self.uid_order)
         
-        while len(self.uid_order) > self.max_total_uids:
-            oldest_uid = self.uid_order.pop(0)
+        if total_uids <= self.max_total_uids:
+            return
+        
+        # Set default ranges
+        if target_range is None:
+            target_range = (3/8, 5/8) 
+        if buffer_range is None:
+            buffer_range = (0/8, 1/8)
+        
+        max_per_category = self.max_total_uids // 2
+        
+        # Categorize UIDs 
+        target_only_uids = []
+        buffer_only_uids = []
+        overlap_uids = []  # UIDs in both ranges
+        other_uids = []
+        
+        for uid_str in self.uid_order:
+            uid_stats = self.get_uid_stats(uid_str)
+            if uid_stats is None:
+                other_uids.append(uid_str)
+                continue
+                
+            latest_score = uid_stats['mu_current'] if uid_stats['current_count'] > 0 else uid_stats['mu_alpha']
             
-            self.alpha_scores.pop(oldest_uid, None)
-            self.current_scores.pop(oldest_uid, None)
-            self.sample_data.pop(oldest_uid, None)
-    
+            in_target = target_range[0] <= latest_score <= target_range[1]
+            in_buffer = buffer_range[0] <= latest_score <= buffer_range[1]
+            
+            if in_target and in_buffer:
+                overlap_uids.append(uid_str)
+            elif in_target:
+                target_only_uids.append(uid_str)
+            elif in_buffer:
+                buffer_only_uids.append(uid_str)
+            else:
+                other_uids.append(uid_str)
+        
+        target_uids = target_only_uids + overlap_uids
+        buffer_uids = buffer_only_uids
+        
+        uids_to_remove = []
+        
+        # 1. High-quality samples limit
+        if len(target_uids) > max_per_category:
+            excess_target = len(target_uids) - max_per_category
+            # Remove oldest UIDs first
+            target_to_remove = [uid for uid in self.uid_order if uid in target_uids][:excess_target]
+            uids_to_remove.extend(target_to_remove)
+            target_uids = [uid for uid in target_uids if uid not in target_to_remove]
+        
+        # 2. Difficult samples limit
+        if len(buffer_uids) > max_per_category:
+            excess_buffer = len(buffer_uids) - max_per_category
+            # Remove oldest UIDs first
+            buffer_to_remove = [uid for uid in self.uid_order if uid in buffer_uids][:excess_buffer]
+            uids_to_remove.extend(buffer_to_remove)
+            buffer_uids = [uid for uid in buffer_uids if uid not in buffer_to_remove]
+        
+        remaining_total = len(target_uids) + len(buffer_uids) + len(other_uids)
+        if remaining_total > self.max_total_uids:
+            excess_count = remaining_total - self.max_total_uids
+            
+            # Priority: other > buffer > target
+            other_remove_count = min(len(other_uids), excess_count)
+            if other_remove_count > 0:
+                other_to_remove = other_uids[:other_remove_count]
+                uids_to_remove.extend(other_to_remove)
+                excess_count -= other_remove_count
+            
+            if excess_count > 0:
+                buffer_remove_count = min(len(buffer_uids), excess_count)
+                buffer_to_remove = [uid for uid in self.uid_order if uid in buffer_uids][:buffer_remove_count]
+                uids_to_remove.extend(buffer_to_remove)
+                excess_count -= buffer_remove_count
+            
+            if excess_count > 0:
+                target_remove_count = min(len(target_uids), excess_count)
+                target_to_remove = [uid for uid in self.uid_order if uid in target_uids][:target_remove_count]
+                uids_to_remove.extend(target_to_remove)
+        
+        if uids_to_remove:
+            for uid_str in uids_to_remove:
+                if uid_str in self.uid_order:
+                    self.uid_order.remove(uid_str)
+                
+                self.alpha_scores.pop(uid_str, None)
+                self.current_scores.pop(uid_str, None)
+                self.sample_data.pop(uid_str, None)
+                        
     def get_uid_stats(self, uid_str: str) -> Optional[dict]:
         alpha_scores = self.alpha_scores.get(uid_str, [])
         current_scores = self.current_scores.get(uid_str, [])
-        
-        if len(alpha_scores) < 2:
-            stats = {
-            'mu_alpha': alpha_scores,
-            'sigma_alpha': 1e-6,
-            'mu_current': current_scores,
-            'sigma_current': 1e-6,
-            'alpha_count': 1,
-            'current_count': 1,
-            }
-        
-            return stats
             
         stats = {
             'mu_alpha': np.mean(alpha_scores),
             'sigma_alpha': max(np.std(alpha_scores), 1e-6),
-            'mu_current': np.mean(current_scores+alpha_scores) if current_scores else np.mean(alpha_scores),
-            'sigma_current': max(np.std(current_scores+alpha_scores), 1e-6) if current_scores else max(np.std(alpha_scores), 1e-6),
+            'mu_current': np.mean(current_scores) if current_scores else np.mean(alpha_scores),
+            'sigma_current': max(np.std(current_scores), 1e-6) if current_scores else max(np.std(alpha_scores), 1e-6),
             'alpha_count': len(alpha_scores),
             'current_count': len(current_scores),
         }
@@ -245,7 +325,7 @@ class OffPolicyGroupBuffer:
   
 
 class TemporaryCurrentPolicyContext:
-    """临时切换到current policy的上下文管理器"""
+    """Temporary switch to current policy context manager"""
     
     def __init__(self, actor_wg):
         self.actor_wg = actor_wg
@@ -270,50 +350,42 @@ class TemporaryCurrentPolicyContext:
 class OffPolicyManager:
     def __init__(self, config):
         self.config = config
+
+
         self.enable_off_policy_samples = config.algorithm.get("enable_off_policy_samples", True) 
         self.enable_off_policy_rollout = config.algorithm.get("enable_off_policy_rollout", True) 
         self.enable_off_policy_reeval = config.algorithm.get("enable_off_policy_reeval", False) 
-        
-        
         self.enable_multi_level_downsampling = config.algorithm.get("enable_multi_level_downsampling", False)
         self.enable_adaptive_target_range = config.algorithm.get("enable_adaptive_target_range", False)
         self.enable_completion = config.algorithm.get("enable_completion_batch", False)
-        self.train_batch_filter = config.algorithm.get("train_batch_filter", "gaussian")  # gaussian/range/uniform
+
+
+        self.bad_thr_c1 = config.algorithm.get("bad_thr_c1", 1/8)
+        self.high_thr_c2_max = config.algorithm.get("high_thr_c2_max", 4/8)
+        self.high_thr_c3_max = config.algorithm.get("high_thr_c3_max", 5/8) 
+        self.high_thr_c2_min = config.algorithm.get("high_thr_c2_min", 1/8)  
+        self.high_thr_c3_min = config.algorithm.get("high_thr_c3_min", 2/8) 
         
-        self.lambda_1 = config.algorithm.get("lambda_1", 2.0)  # re-eval batch weight
-        self.lambda_2 = config.algorithm.get("lambda_2", 1.0)  # target completion batch weight
         
-        
+        self.train_batch_filter = config.algorithm.get("train_batch_filter", "gaussian")  # gaussian/range/uniform/e2h_gaussian
+        self.mu = config.algorithm.get("mu", 4)
+        self.sigma = config.algorithm.get("sigma", 2)
+        self.total_steps = 0
 
         self.alpha_update_freq = config.algorithm.get("off_policy_update_freq", 10)
         self.reeval_freq = config.algorithm.get("off_policy_reeval_freq", 1)
         self.max_reeval_ids = config.algorithm.get("max_reeval_ids", 256)  
 
+        self.lambda_1 = config.algorithm.get("lambda_1", 2.0)  # X2 weight
+        self.lambda_2 = config.algorithm.get("lambda_2", 1.0)  # X3 weight
         self.max_prompt_length = config.data.get("max_prompt_length", 1024)
-        self.fix_max_size = config.algorithm.get("fix_max_size", False)
-        self.mu = config.algorithm.get("mu", 4)
-        self.sigma = config.algorithm.get("sigma", 2)
-        
-        self.score_candidates = [i/8 for i in range(9)]  # [0/8, 1/8, 2/8, ..., 8/8]
 
+        self.score_candidates = [i/8 for i in range(9)]  # [0/8, 1/8, 2/8, ..., 7/8, 8/8]
 
-        raw_weights = []
-        for i in range(9):
-            weight = stats.norm.pdf(i, self.mu, self.sigma)
-            raw_weights.append(weight)
-        
-        total_weight = sum(raw_weights)
-        self.gaussian_weights = {i: w/total_weight for i, w in enumerate(raw_weights)}
-        print("Gaussian weights for score candidates:")
-        for i, score in enumerate(self.score_candidates):
-            print(f"  {score:.3f}: {self.gaussian_weights[i]:.3f}")
-        self.score_to_index = {score: i for i, score in enumerate(self.score_candidates)}
-
-
-        self.target_accuracy_range = (4/8, 7/8)  
-        self.buffer_accuracy_range = (0/8, 1/8)  
-        self.train_accuracy_range = (1/8, 7/8)  
-        self.promotion_threshold = (5/8, 8/8)    
+        self.train_accuracy_range = (1/8, 7/8) # DAPO only
+        self.target_accuracy_range = (self.high_thr_c2_min, self.high_thr_c3_max)  # high-quality samples acc thr
+        self.buffer_accuracy_range = (0/8, self.bad_thr_c1)  # difficult samples acc thr
+        self.promotion_threshold = (self.bad_thr_c1, 1)  # prompoted difficult samples acc thr
         
         self.step_count = 0
         
@@ -336,16 +408,13 @@ class OffPolicyManager:
         return self.target_accuracy_range[0] <= score <= self.target_accuracy_range[1]
     
     def _is_in_buffer_range(self, score: float) -> bool:
-
         return self.buffer_accuracy_range[0] <= score <= self.buffer_accuracy_range[1]
     
     def _is_in_train_range(self, score: float) -> bool:
-
         return self.train_accuracy_range[0] <= score <= self.train_accuracy_range[1]
     
     def _is_promoted(self, score: float) -> bool:
-
-        return self.promotion_threshold[0] <= score <= self.promotion_threshold[1]
+        return self.promotion_threshold[0] < score < self.promotion_threshold[1]
 
     def collect_data(self, batch, is_alpha_sampling: bool):
         """Collect data to buffer, based on uid group average score"""
@@ -369,10 +438,13 @@ class OffPolicyManager:
         for uid_str, score_list in uid_to_scores.items():
             group_mean_score = np.mean(score_list)
             
-            # Only add group to buffer if mean score is in 1/8-3/8 range or in target range
+
+            # Only add group to buffer if mean score is in [0, c1] range or in target range [c2, c3]
             if self._is_in_buffer_range(group_mean_score) or self._is_in_target_range(group_mean_score):
                 # Add all samples in this group to buffer
                 indices = uid_to_indices[uid_str]
+                # Update buffer stats for this group 
+                self.buffer.add_score(uid_str, score_list, is_alpha_sampling, target_range=self.target_accuracy_range, buffer_range=self.buffer_accuracy_range)
                 for idx in indices:
                     sample_data = self._extract_sample_data(batch, idx)
                     
@@ -383,20 +455,18 @@ class OffPolicyManager:
                         sample_data=sample_data
                     )
                     
-                    self.buffer.add_sample(uid_str, sample)
-                
-                # Update buffer stats for this group - 传入score列表而不是mean score
-                self.buffer.add_score(uid_str, score_list, is_alpha_sampling)
+                    self.buffer.add_sample(uid_str, sample, target_range=self.target_accuracy_range, buffer_range=self.buffer_accuracy_range)
+                    
 
-
-    def filter_current_batch_samples(self, batch: 'DataProto', target_size_ratio: float = 0.75) -> 'DataProto':
-
+    def filter_current_batch_samples(self, batch: 'DataProto', max_ratio: float = 0.75) -> 'DataProto':
         if self.train_batch_filter == "gaussian":
-            return self.gaussian_sample_from_current_batch(batch, target_size_ratio)
-        elif self.train_batch_filter == "range":
-            return self.range_sample_from_current_batch(batch, target_size_ratio)
+            return self.gaussian_sample_from_current_batch(batch, max_ratio)
+        elif self.train_batch_filter == "e2h_gaussian": 
+            return self.e2h_gaussian_sample_from_batch(batch, current_step=self.step_count, total_steps=self.total_steps)
+        elif self.train_batch_filter == "range": # DAPO
+            return self.range_sample_from_current_batch(batch, max_ratio)
         elif self.train_batch_filter == "uniform":
-            return self.uniform_sample_from_current_batch(batch, target_size_ratio)
+            return self.uniform_sample_from_current_batch(batch, max_ratio)
         else:
             raise ValueError(f"Unknown train_batch_filter: {self.train_batch_filter}")
     
@@ -412,76 +482,97 @@ class OffPolicyManager:
                 closest_idx = i
         
         return closest_idx
-    
-    # def gaussian_sample_from_current_batch(self, batch: 'DataProto', target_size_ratio: float = 0.75) -> 'DataProto':
 
-    #     scores = batch.batch["token_level_scores"].sum(dim=-1).cpu().numpy()
-    #     uids = batch.non_tensor_batch["uid"]
-        
-    #     score_to_indices = {i: [] for i in range(9)}
-    #     uid_to_indices = defaultdict(list)
-    #     uid_to_scores = defaultdict(list)
-        
-    #     for i, (uid, score) in enumerate(zip(uids, scores)):
-    #         uid_str = str(uid)
-    #         uid_to_indices[uid_str].append(i)
-    #         uid_to_scores[uid_str].append(score)
-        
-    #     for uid_str, score_list in uid_to_scores.items():
-    #         group_mean_score = np.mean(score_list)
-    #         score_idx = self._get_score_index(group_mean_score)
-    #         score_to_indices[score_idx].extend(uid_to_indices[uid_str])
-        
-        
-    #     total_samples = len(batch)
-    #     target_total_samples = int(total_samples * target_size_ratio)
-        
-    #     raw_weights = []
-    #     for i in range(9):
-    #         weight = stats.norm.pdf(i, self.mu, self.sigma)
-    #         raw_weights.append(weight)
-        
-    #     total_weight = sum(raw_weights)
-    #     self.gaussian_weights = {i: w/total_weight for i, w in enumerate(raw_weights)}
-    #     print("Current Gaussian weights for score candidates:")
-    #     for i, score in enumerate(self.score_candidates):
-    #         print(f"  {score:.3f}: {self.gaussian_weights[i]:.3f}")
 
-    #     selected_indices = []
+    def e2h_gaussian_sample_from_batch(
+        self, 
+        batch: 'DataProto', 
+        current_step: int,
+        total_steps: int,
+        max_ratio: float = 0.75,
+        beta: float = 0.75,
+        sigma: float = 2
+    ) -> 'DataProto':
+        scores = batch.batch["token_level_scores"].sum(dim=-1).cpu().numpy()
+        uids = batch.non_tensor_batch["uid"]
         
-    #     for score_idx, weight in self.gaussian_weights.items():
-    #         available_indices = score_to_indices[score_idx]
-    #         target_count = int(target_total_samples * weight)
+        uid_to_indices = defaultdict(list)
+        uid_to_scores = defaultdict(list)
+        for i, (uid, score) in enumerate(zip(uids, scores)):
+            uid_str = str(uid)
+            uid_to_indices[uid_str].append(i)
+            uid_to_scores[uid_str].append(score)
+        
+        score_to_indices = {i: [] for i in range(9)}  # 0=hardest, 8=easiest
+        for uid_str, score_list in uid_to_scores.items():
+            group_mean_score = np.mean(score_list)
+            score_idx = self._get_score_index(group_mean_score)
+            score_to_indices[score_idx].extend(uid_to_indices[uid_str])
+        
+        available_score_indices = [i for i in range(9) if len(score_to_indices[i]) > 0]
+        if not available_score_indices:
+            print("Warning: No valid score indices found, returning original batch")
+            return batch
+        
+        min_difficulty = min(available_score_indices)  # 0=hardest
+        max_difficulty = max(available_score_indices)  # 8=easiest
+        difficulty_range = max_difficulty - min_difficulty
+        
+        progress = current_step / total_steps if total_steps != 0 else 0.0
+        
+        x_t = max_difficulty - (progress ** beta) * difficulty_range
+        
+        print(f"E2H-G Sampling: step={current_step}/{total_steps}, progress={progress:.2f}")
+        print(f"Current batch difficulty range: Level-{min_difficulty} (hardest) to Level-{max_difficulty} (easiest)")
+        print(f"Dynamic sampling position x_t: {x_t:.2f}")
+        
+        raw_weights = {}
+        for difficulty_level in available_score_indices:
+            weight = np.exp(-(difficulty_level - x_t) **2 / (2 * sigma** 2))
+            raw_weights[difficulty_level] = weight
+        
+        total_weight = sum(raw_weights.values())
+        e2h_weights = {lvl: w / total_weight for lvl, w in raw_weights.items()}
+        self.gaussian_weights = e2h_weights
+        
+        print("E2H-G Weights (difficulty level -> weight):")
+        for lvl in sorted(available_score_indices):
+            print(f"  Level-{lvl}: weight={e2h_weights[lvl]:.3f}, available={len(score_to_indices[lvl])}")
+        
+        total_samples = len(batch)
+        target_total_samples = int(total_samples * max_ratio)
+        selected_indices = []
+        
+        for difficulty_level in available_score_indices:
+            weight = e2h_weights[difficulty_level]
+            available_indices = score_to_indices[difficulty_level]
+            target_count = int(target_total_samples * weight)
             
-    #         if len(available_indices) <= target_count:
-                
-    #             selected_indices.extend(available_indices)
-    #             print(f"Score {self.score_candidates[score_idx]:.3f}: selected all {len(available_indices)} samples")
-    #         else:
-                
-    #             sampled = random.sample(available_indices, target_count)
-    #             selected_indices.extend(sampled)
-    #             print(f"Score {self.score_candidates[score_idx]:.3f}: sampled {target_count} from {len(available_indices)} samples")
+            if len(available_indices) <= target_count:
+                selected_indices.extend(available_indices)
+                print(f"Level-{difficulty_level}: selected all {len(available_indices)} samples")
+            else:
+                sampled = random.sample(available_indices, target_count)
+                selected_indices.extend(sampled)
+                print(f"Level-{difficulty_level}: sampled {target_count} from {len(available_indices)} samples")
         
-    #     if not selected_indices:
-    #         print("Warning: No samples selected in gaussian sampling, returning original batch")
-    #         return batch
-            
-    #     selected_indices_tensor = torch.tensor(selected_indices)
-    #     divisible_count = (len(selected_indices_tensor) // 8 ) * 8
-    #     if divisible_count > 0:
-    #         selected_indices_tensor = selected_indices_tensor[:divisible_count]
-    #     else:
-    #         print("Warning: Selected samples less than 8, returning original batch")
-    #         return batch
+        if not selected_indices:
+            print("Warning: No samples selected, returning original batch")
+            return batch
         
-    #     sampled_batch = batch.select_idxs(selected_indices_tensor)
+        selected_indices_tensor = torch.tensor(selected_indices)
+        divisible_count = (len(selected_indices_tensor) // 8) * 8
+        if divisible_count > 0:
+            selected_indices_tensor = selected_indices_tensor[:divisible_count]
+        else:
+            print("Warning: Selected samples <8, returning original batch")
+            return batch
         
-    #     print(f"Gaussian sampling: {len(sampled_batch)}/{total_samples} samples selected ({len(sampled_batch)/total_samples:.1%})")
-    #     print(f"✓ Truncated to {len(sampled_batch)} samples (divisible by 8)")
-    #     return sampled_batch
+        sampled_batch = batch.select_idxs(selected_indices_tensor)
+        print(f"E2H-G sampling: {len(sampled_batch)}/{total_samples} selected ({len(sampled_batch)/total_samples:.1%})")
+        return sampled_batch
 
-    def gaussian_sample_from_current_batch(self, batch: 'DataProto', target_size_ratio: float = 0.75) -> 'DataProto':
+    def gaussian_sample_from_current_batch(self, batch: 'DataProto', max_ratio: float = 0.75) -> 'DataProto':
         scores = batch.batch["token_level_scores"].sum(dim=-1).cpu().numpy()
         uids = batch.non_tensor_batch["uid"]
         
@@ -501,7 +592,7 @@ class OffPolicyManager:
             score_to_indices[score_idx].extend(uid_to_indices[uid_str])
         
         
-        available_score_indices = [i for i in range(9) if len(score_to_indices[i]) > 0]
+        available_score_indices = [i for i in range(8) if len(score_to_indices[i]) > 0]
         
         if not available_score_indices:
             print("Warning: No valid score indices found, returning original batch")
@@ -510,11 +601,12 @@ class OffPolicyManager:
         min_score_idx = min(available_score_indices)
         max_score_idx = max(available_score_indices)
         
-        print(f"Current batch score range: {self.score_candidates[min_score_idx]:.3f} to {self.score_candidates[max_score_idx]:.3f}")
+        # print(f"Current batch score range: {self.score_candidates[min_score_idx]:.3f} to {self.score_candidates[max_score_idx]:.3f}")
+        print(f"Current batch score range: Level-{min_score_idx} to Level-{max_score_idx}")
         print(f"Available score indices: {available_score_indices}")
         
         total_samples = len(batch)
-        target_total_samples = int(total_samples * target_size_ratio)
+        target_total_samples = int(total_samples * max_ratio)
         
         
         raw_weights = {}
@@ -572,8 +664,7 @@ class OffPolicyManager:
         print(f"✓ Truncated to {len(sampled_batch)} samples (divisible by 8)")
         return sampled_batch
 
-    def range_sample_from_current_batch(self, batch: 'DataProto', target_size_ratio: float = 0.75) -> 'DataProto':
-
+    def range_sample_from_current_batch(self, batch: 'DataProto', max_ratio: float = 0.75) -> 'DataProto':
         scores = batch.batch["token_level_scores"].sum(dim=-1).cpu().numpy()
         uids = batch.non_tensor_batch["uid"]
         
@@ -598,7 +689,7 @@ class OffPolicyManager:
         
         
         total_samples = len(batch)
-        target_total_samples = int(total_samples * target_size_ratio)
+        target_total_samples = int(total_samples * max_ratio)
         
         if len(selected_indices) > target_total_samples:
             selected_indices = random.sample(selected_indices, target_total_samples)
@@ -614,10 +705,9 @@ class OffPolicyManager:
             print("Warning: Selected samples less than 8, returning original batch")
             return batch
 
-    def uniform_sample_from_current_batch(self, batch: 'DataProto', target_size_ratio: float = 0.75) -> 'DataProto':
-        
+    def uniform_sample_from_current_batch(self, batch: 'DataProto', max_ratio: float = 0.75) -> 'DataProto':
         total_samples = len(batch)
-        target_total_samples = int(total_samples * target_size_ratio)
+        target_total_samples = int(total_samples * max_ratio)
         
         
         all_indices = list(range(total_samples))
@@ -634,10 +724,8 @@ class OffPolicyManager:
             print("Warning: Selected samples less than 8, returning original batch")
             return batch
 
-
-
     def sample_filtered_groups(self, target_groups: int) -> Optional['DataProto']:
-        """Sample data from buffer for training, based on 4/8-7/8 range"""
+        """Sample high-quality data from buffer for training"""
         if not self.enable_off_policy_samples:
             return None
         
@@ -695,9 +783,8 @@ class OffPolicyManager:
 
         def filter_func(stats):
             mu_alpha = stats['mu_alpha']
-            mu_current = stats['mu_current']
-            
-            latest_score = mu_current if stats['current_count'] > 0 else mu_alpha
+
+            latest_score = mu_alpha
             return self._is_in_buffer_range(latest_score)
         
         for uid_str, samples in self.buffer.sample_data.items():
@@ -742,8 +829,7 @@ class OffPolicyManager:
         selected_samples = [uid_sample[uid] for uid in selected_uids]
         
         self.promotion_stats["total_reevaluated"] += len(selected_uids)
-        # print(f"Re-evaluating {len(selected_uids)} groups (will generate {len(selected_uids)} * {self.config.actor_rollout_ref.rollout.val_kwargs.n * 2} responses)...")
-        print(f"Re-evaluating {len(selected_uids)} groups (will generate {len(selected_uids)} * {self.config.actor_rollout_ref.rollout.val_kwargs.n} responses)...")
+        print(f"Re-evaluating {len(selected_uids)} groups (will generate {len(selected_uids)} * {self.config.actor_rollout_ref.rollout.n} responses)...")
         
         with TemporaryCurrentPolicyContext(actor_wg):
             reevaluated_batch = self._construct_dataproto_from_samples_for_re_eval(selected_samples)
@@ -784,22 +870,21 @@ class OffPolicyManager:
                 "pad_token_id": tokenizer.pad_token_id,
                 "recompute_log_prob": False,
                 "do_sample": True,
-                "is_re_rollout": True,  # Set flag, generate 2 times rollout.n responses
+                "is_re_rollout": True,  # Set flag, generate rollout.n responses
             }
             
             try:
                 # Re-generate using current policy - each prompt will generate rollout.n * 2 responses
                 generated = actor_wg.generate_sequences(gen_batch)
-                # reevaluated_batch = reevaluated_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.val_kwargs.n * 2, interleave=True)
-                reevaluated_batch = reevaluated_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.val_kwargs.n, interleave=True)
+                # reevaluated_batch = reevaluated_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n * 2, interleave=True)
+                reevaluated_batch = reevaluated_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
                 reevaluated_full_batch = reevaluated_batch.union(generated)
 
-                rollout_n = self.config.actor_rollout_ref.rollout.val_kwargs.n
+                rollout_n = self.config.actor_rollout_ref.rollout.n
                 # expected_total_samples = target_count * rollout_n * 2
                 expected_total_samples = target_count * rollout_n
                 actual_total_samples = len(reevaluated_full_batch)
                 print(f"Generated {actual_total_samples} responses for {target_count} prompts (expected: {expected_total_samples})")
-                
                 
                 # Calculate new reward
                 if callable(reward_fn):
@@ -812,94 +897,41 @@ class OffPolicyManager:
                     reward_tensor = torch.zeros(len(reevaluated_full_batch))
                 
                 reevaluated_full_batch.batch["token_level_scores"] = reward_tensor
-                
+
                 # Check which groups are promoted - need to calculate mean score for each group and down sample
                 all_scores = reward_tensor.sum(-1).cpu().numpy()
                 promoted_sample_indices = []
                 uids_to_remove = []
                 uids_to_promoted = []
                 
-                # Each uid corresponds to rollout_n * 2 responses
-                double_rollout_n = rollout_n 
                 
                 for i, uid_str in enumerate(selected_uids):
                     
-                    start_idx = i * double_rollout_n
-                    end_idx = start_idx + double_rollout_n
+                    start_idx = i * rollout_n
+                    end_idx = start_idx + rollout_n
                     group_scores = all_scores[start_idx:end_idx]
                     
-                    oversampling_score = np.mean(group_scores)
+                    reevaluated_score = np.mean(group_scores)
             
                     original_score = uid_to_original_mean_score[uid_str]
                     
-                    if not self.enable_multi_level_downsampling:
-                        # Down sampling: The target is to let selected samples mean score as large as possible, but not exceed target_range upper bound
-                        downsampled_indices = self._downsample_responses(
-                            group_scores, 
-                            target_samples=rollout_n,
-                            max_mean_score=7/8,
-                        )
-                        
-                        downsampled_scores = group_scores[downsampled_indices]
-                        group_mean_score = np.mean(downsampled_scores)
-                        
+                    if reevaluated_score > original_score:
+                    # if self._is_promoted(reevaluated_score):
 
-                        if group_mean_score > original_score:
-                        # if self._is_promoted(group_mean_score):
+                        global_indices = [start_idx + local_idx for local_idx in range(rollout_n)]
+                        promoted_sample_indices.extend(global_indices)
+                        uids_to_promoted.append(uid_str)
 
-                            global_indices = [start_idx + local_idx for local_idx in downsampled_indices]
-                            promoted_sample_indices.extend(global_indices)
-                            uids_to_promoted.append(uid_str)
+                        self.promotion_stats["successful_promotions"] += 1
 
-                            self.promotion_stats["successful_promotions"] += 1
+                    # if not (self._is_in_buffer_range(group_mean_score) or self._is_in_target_range(group_mean_score)):
+                    # if self._is_promoted(reevaluated_score):
+                    #     uids_to_remove.append(uid_str)
 
-                        # if not (self._is_in_buffer_range(group_mean_score) or self._is_in_target_range(group_mean_score)):
-                        if self._is_promoted(oversampling_score):
-                            uids_to_remove.append(uid_str)
-
-                        # update buffer score
-                        # self.buffer.add_score(uid_str, group_mean_score, is_alpha=False)
-                        self.buffer.add_score(uid_str, downsampled_scores.tolist(), is_alpha=False)
+                    # update buffer score
+                    # self.buffer.add_score(uid_str, group_mean_score, is_alpha=False)
+                    self.buffer.add_score(uid_str, group_scores.tolist(), is_alpha=False, target_range=self.target_accuracy_range, buffer_range=self.buffer_accuracy_range)
                     
-                    else:
-                        downsampled_indices_list = self._downsample_responses_multi_level(
-                        group_scores, 
-                        target_samples=rollout_n,
-                        max_mean_score=7/8,
-                        )
-                        
-                        best_scores = [] 
-                        best_mean_score = 0
-                        promoted_batches_count = 0
-                        
-                        for batch_idx, downsampled_indices in enumerate(downsampled_indices_list):
-                            downsampled_scores = group_scores[downsampled_indices]
-                            group_mean_score = np.mean(downsampled_scores)
-                            if group_mean_score > best_mean_score:
-                                best_mean_score = group_mean_score
-                                best_scores = downsampled_scores.tolist() 
-                                global_indices = [start_idx + local_idx for local_idx in downsampled_indices]
-                                promoted_sample_indices.extend(global_indices)
-                                
-                                promoted_batches_count += 1
-                            
-                            else:
-                                break
-
-                        if promoted_batches_count > 0:
-                            uids_to_promoted.append(uid_str)
-                            self.promotion_stats["successful_promotions"] += promoted_batches_count
-                            
-
-                        # if not (self._is_in_buffer_range(group_mean_score) or self._is_in_target_range(group_mean_score)):
-                        if self._is_promoted(oversampling_score):
-                            uids_to_remove.append(uid_str)
-
-                        # update buffer score
-                        # self.buffer.add_score(uid_str, best_mean_score if best_mean_score > 0 else 0, is_alpha=False)
-                        if best_scores:
-                            self.buffer.add_score(uid_str, best_scores, is_alpha=False)
-            
                 # remove from buffer promoted groups
                 for uid_str in uids_to_remove:
                     if uid_str in self.buffer.sample_data:
@@ -927,161 +959,14 @@ class OffPolicyManager:
                 print(f"Error in buffer re-evaluation: {e}")
                 return None
 
-
-    def _downsample_responses_multi_level(self, scores: np.ndarray, target_samples: int, 
-                                     max_mean_score: float = 7/8) -> List[np.ndarray]:
-        """        
-        Args:
-            scores: the scores of all responses (only contains 0 and 1)
-            target_samples: the number of samples to select for each group (rollout_n)
-            max_mean_score: the upper bound of mean score (7/8)
-            
-        Returns:
-            List[np.ndarray]: the indices of selected samples for each group
-        """
-        n_total = len(scores)
-        
-        if target_samples >= n_total:
-            return [np.arange(n_total)]
-        
-        ones_indices = np.where(scores == 1)[0]
-        zeros_indices = np.where(scores == 0)[0]
-        
-        num_ones_available = len(ones_indices)
-        num_zeros_available = len(zeros_indices)
-        
-        
-        max_ones_possible = int(max_mean_score * target_samples)
-        score_levels = []
-        
-        
-        for i in range(1, max_ones_possible + 1):
-            mean_score = i / target_samples
-            if mean_score <= max_mean_score:
-                score_levels.append(i)  
-        
-        
-        result_batches = []
-        
-        for target_ones in score_levels:
-            selected_indices = []
-            
-            if num_ones_available >= target_ones:
-                selected_ones = np.random.choice(ones_indices, size=target_ones, replace=False)
-                selected_indices.extend(selected_ones)
-                
-                zeros_needed = target_samples - target_ones
-                
-                if zeros_needed > 0:
-                    if num_zeros_available >= zeros_needed:
-                        selected_zeros = np.random.choice(zeros_indices, size=zeros_needed, replace=False)
-                        selected_indices.extend(selected_zeros)
-                    else:
-                        selected_indices.extend(zeros_indices)
-                        still_needed = target_samples - len(selected_indices)
-                        if still_needed > 0:
-                            remaining_ones = np.setdiff1d(ones_indices, selected_ones)
-                            additional_ones = np.random.choice(remaining_ones, size=still_needed, replace=False)
-                            selected_indices.extend(additional_ones)
-            
-            
-            if len(selected_indices) == target_samples: 
-                selected_indices = np.array(selected_indices[:target_samples]) 
-                actual_ones = len([i for i in selected_indices if scores[i] == 1])
-                actual_mean_score = actual_ones / len(selected_indices) if len(selected_indices) > 0 else 0
-                if actual_ones == target_ones:
-                    result_batches.append(selected_indices)
-
-        return result_batches
-
-
-    def _downsample_responses(self, scores: np.ndarray, target_samples: int, max_mean_score: float) -> np.ndarray:
-        """
-        Select target_samples from scores, such that mean score is as large as possible but not exceed max_mean_score
-        
-        Since each response's score is only 0 or 1, max_mean_score = x/target_samples
-        Therefore, at most x score=1 samples can be selected
-        
-        Args:
-            scores: All responses' scores array (only contains 0 and 1)
-            target_samples: Number of samples to select (rollout_n)
-            max_mean_score: mean score's upper bound (x/rollout_n)
-            
-        Returns:
-            Selected samples' indices array
-        """
-        n_total = len(scores)
-        
-        if target_samples >= n_total:
-            # If target_samples >= n_total, directly return all indices
-            return np.arange(n_total)
-        
-        # Calculate max number of score=1 samples that can be selected
-        max_ones = int(max_mean_score * target_samples)
-        
-        # Find indices of all score=1 and score=0 samples
-        ones_indices = np.where(scores == 1)[0]
-        zeros_indices = np.where(scores != 1)[0]
-        
-        num_ones_available = len(ones_indices)
-        num_zeros_available = len(zeros_indices)
-        
-        selected_indices = []
-        
-        if num_ones_available >= max_ones:
-            # If num_ones_available >= max_ones, randomly select max_ones ones
-            selected_ones = np.random.choice(ones_indices, size=max_ones, replace=False)
-            selected_indices.extend(selected_ones)
-            
-            # If num_zeros_available >= zeros_needed, randomly select zeros_needed
-            zeros_needed = target_samples - max_ones
-            if zeros_needed > 0:
-                if num_zeros_available >= zeros_needed:
-
-                    selected_zeros = np.random.choice(zeros_indices, size=zeros_needed, replace=False)
-                    selected_indices.extend(selected_zeros)
-                else:
-                    selected_indices.extend(zeros_indices)
-                    still_needed = target_samples - len(selected_indices)
-                    if still_needed > 0:
-                        
-                        remaining_ones = np.setdiff1d(ones_indices, selected_ones)
-                        if len(remaining_ones) >= still_needed:
-                            additional_ones = np.random.choice(remaining_ones, size=still_needed, replace=False)
-                            selected_indices.extend(additional_ones)
-                        else:
-                            
-                            selected_indices.extend(remaining_ones)
-                
-            actual_ones = len([i for i in selected_indices if scores[i] == 1])
-        else:
-            # If num_ones_available < max_ones, select all ones
-            selected_indices.extend(ones_indices)
-            actual_ones = num_ones_available
-            
-            # If num_zeros_available >= zeros_needed, randomly select zeros_needed
-            zeros_needed = target_samples - num_ones_available
-            if zeros_needed > 0 and num_zeros_available >= zeros_needed:
-                selected_zeros = np.random.choice(zeros_indices, size=zeros_needed, replace=False)
-                selected_indices.extend(selected_zeros)
-            elif zeros_needed > 0:
-                selected_indices.extend(zeros_indices)
-        
-        selected_indices = np.array(selected_indices)
-        actual_mean_score = actual_ones / len(selected_indices) if len(selected_indices) > 0 else 0
-        
-        return selected_indices
-
     def _update_adaptive_target_range(self):
 
         if not self.enable_adaptive_target_range:
             return {}
-        
-
+    
         buffer_metrics = self.buffer.get_metrics()
         alpha_score_mean = buffer_metrics.get('buffer/alpha_score_mean', None)
 
-        self.mu = 1 - alpha_score_mean
 
         if alpha_score_mean is None:
             return {}
@@ -1092,35 +977,22 @@ class OffPolicyManager:
         
     
         # When alpha_score_mean is lower, select higher score samples (easy samples, easier to learn)
-        easy_range_lower, easy_range_upper = 4/8, 6/8  
+        c2_high, c3_high = self.high_thr_c2_max, self.high_thr_c3_max  
         # When alpha_score_mean is higher, select lower score samples (hard samples, more challenging)
-        hard_range_lower, hard_range_upper = 0/8, 2/8 
+        c2_low, c3_low = self.high_thr_c2_min, self.high_thr_c3_min
         
-        # Linearly interpolate new range（Negatively correlated: higher alpha_score_mean, lower target_score）
-        # Use clamp to ensure alpha_score_mean is in [0,1] range
-
-        alpha_min, alpha_max = 0.0, 1.0
+        alpha_min, alpha_max = 0.2, 0.8
         
         if alpha_score_mean <= alpha_min:
-            alpha_score_clamped = 0.0  #  easy_range
+            ratio = 0.0  #  easy_range
         elif alpha_score_mean >= alpha_max:
-            alpha_score_clamped = 1.0  #  hard_range
+            ratio = 1.0  #  hard_range
         else:
-            alpha_score_clamped = (alpha_score_mean - alpha_min) / (alpha_max - alpha_min)
+            ratio = (alpha_score_mean - alpha_min) / (alpha_max - alpha_min)
         
    
-        new_lower = easy_range_lower + (hard_range_lower - easy_range_lower) * alpha_score_clamped
-        new_upper = easy_range_upper + (hard_range_upper - easy_range_upper) * alpha_score_clamped
-        
-
-        new_lower = np.clip(new_lower, 0/8, 4/8)
-        new_upper = np.clip(new_upper, 2/8, 6/8)
-    
-        
-        # Ensure lower < upper
-        if new_lower >= new_upper:
-            new_upper = new_lower + 1/8
-            new_upper = min(new_upper, 6/8)
+        new_lower = c2_high - (c2_high - c2_low) * ratio
+        new_upper = c3_high - (c3_high - c3_low) * ratio
         
         # Update target range
         self.target_accuracy_range = (new_lower, new_upper)
@@ -1129,7 +1001,6 @@ class OffPolicyManager:
             "adaptive_range/new_lower": new_lower,
             "adaptive_range/new_upper": new_upper,
         }
-
 
     def get_metrics(self):
 
@@ -1165,6 +1036,7 @@ class OffPolicyManager:
             "off_policy/target_range_samples": target_range_count,     
             "off_policy/promotion_rate": promotion_rate,
             "off_policy/remove_rate": remove_rate,
+            "off_policy/total_reevaluated": self.promotion_stats["total_reevaluated"],
             "off_policy/buffer_size": buffer_metrics.get('buffer/total_uids', 0),
         }
         
@@ -1183,7 +1055,6 @@ class OffPolicyManager:
                 
         return sample_data
     
-
     def _construct_dataproto_from_samples(self, samples):
         if not samples:
             raise ValueError("No samples provided")
@@ -1206,7 +1077,8 @@ class OffPolicyManager:
             values = []
             for sample in samples:
                 if key in sample.sample_data:
-                    if key in ['input_ids', 'position_ids', 'attention_mask']:
+                    # we should reuse the old_log_probs for buffer samples
+                    if key in ['input_ids', 'position_ids', 'attention_mask', 'old_log_probs']:
                         values.append(sample.sample_data[key])
                     else:
                         values.append(sample.sample_data[key])
@@ -1245,6 +1117,7 @@ class OffPolicyManager:
         first_sample = samples[0]
         gen_keys = list(first_sample.sample_data.keys())
 
+        # cause re-eval use current training policy, so we need re-compute log_prob
         if "gen_multi_modal_data" in gen_keys:
             
             gen_tensor_keys = ["gen_input_ids", "gen_attention_mask", "gen_position_ids"]
@@ -1365,18 +1238,19 @@ class OffPolicyManager:
     
 
     def should_update_vllm_params(self) -> bool:
+        """
+        whether should update vllm params or not
+        """
         if not self.enable_off_policy_rollout:
             return True  
-            
         return self.step_count % self.alpha_update_freq == 0
     
-    def should_update_alpha_policy(self) -> bool:
-        """whether should update alpha policy or not"""
-        return self.enable_off_policy_rollout and (self.step_count % self.alpha_update_freq == 0)
-    
     def prepare_generation(self, actor_wg, global_steps):
+        """
+        prepare generation params for vllm
+        if should_update, then update vllm params to current fsdp params
+        """
         should_update = self.should_update_vllm_params()
-        
         try:
             actor_wg.set_param_update_control(
                 should_update=should_update,
@@ -1392,16 +1266,16 @@ class OffPolicyManager:
         
         return should_update
 
-    
     def sample_with_alpha_policy(self, gen_batch, actor_wg, global_steps):
+        """
+        using delayed vllm policy to sample generations
+        """
         if not self.enable_off_policy_rollout:
             return actor_wg.generate_sequences(gen_batch), False
         
         try:
             self.prepare_generation(actor_wg, global_steps)
-            
             result = actor_wg.generate_sequences(gen_batch)
-            
             return result, True  # is_alpha_sampling
             
         except Exception as e:
@@ -2018,11 +1892,10 @@ class RayPPOTrainer:
 
         # [wanxu] add offpolicy manager
         self.off_policy_manager = OffPolicyManager(self.config)
-
         self._validate_config()
         self._create_dataloader(train_dataset, val_dataset, collate_fn, train_sampler)
         self._init_prompt_tracker()
-
+        self.off_policy_manager.total_steps = self.total_training_steps
 
     def _init_prompt_tracker(self):
         """Initialize prompt accuracy tracker"""
@@ -2296,8 +2169,8 @@ class RayPPOTrainer:
         for test_data in self.val_dataloader:
             test_batch = DataProto.from_single_dict(test_data)
 
-            # repeat test batch
-            test_input_batch = test_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.val_kwargs.n, interleave=True)
+            # repeat test batch (avg@32)
+            test_input_batch = test_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n * 4, interleave=True)
 
             # we only do validation on rule-based rm
             if self.config.reward_model.enable and test_batch[0].non_tensor_batch["reward_model"]["style"] == "model":
@@ -2305,8 +2178,22 @@ class RayPPOTrainer:
 
             # Store original inputs
             input_ids = test_input_batch.batch["input_ids"]
-            # TODO: Can we keep special tokens except for padding tokens?
-            input_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in input_ids]
+
+            if "multi_modal_data" in test_batch.non_tensor_batch:
+                input_texts = []
+                multi_modal_datas = test_input_batch.non_tensor_batch["multi_modal_data"]
+                for idx, (ids, mm_data) in enumerate(zip(input_ids, multi_modal_datas)):
+                    
+                    text = self.tokenizer.decode(ids, skip_special_tokens=True)
+
+                    mm_hash = self._get_multi_modal_hash(mm_data) if mm_data is not None else "none"
+
+                    composite_prompt = f"{text}|MM_HASH:{mm_hash}"
+                    input_texts.append(composite_prompt)
+            else:
+                # TODO: Can we keep special tokens except for padding tokens?
+                input_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in input_ids]
+            
             sample_inputs.extend(input_texts)
 
             batch_keys_to_pop = ["input_ids", "attention_mask", "position_ids"]
@@ -2332,7 +2219,7 @@ class RayPPOTrainer:
                 "pad_token_id": self.tokenizer.pad_token_id,
                 "recompute_log_prob": False,
                 "do_sample": True,
-                "validate": True,
+                "validate": self.config.actor_rollout_ref.rollout.val_kwargs.n == 1,
             }
             print(f"test_gen_batch meta info: {test_gen_batch.meta_info}")
 
@@ -2359,12 +2246,6 @@ class RayPPOTrainer:
 
             test_batch = test_input_batch.union(test_output_gen_batch)
 
-            # print("test_gen_batch", test_gen_batch.batch.keys())
-            # print("test_gen_batch", test_gen_batch.non_tensor_batch.keys())
-            # print("test_input_batch", test_input_batch.batch.keys())
-            # print("test_input_batch", test_input_batch.non_tensor_batch.keys())
-            # print("test_output_gen_batch", test_output_gen_batch.batch.keys())
-            # print("test_output_gen_batch", test_output_gen_batch.non_tensor_batch.keys())
             # evaluate using reward_function
             result = self.val_reward_fn(test_batch, return_dict=True)
             reward_tensor = result["reward_tensor"]
@@ -2418,6 +2299,8 @@ class RayPPOTrainer:
 
         data_sources = np.concatenate(data_source_lst, axis=0)
 
+        print("data_sources", len(data_sources))
+        print("sample_inputs", len(sample_inputs))
         data_src2var2metric2val = process_validation_metrics(data_sources, sample_inputs, reward_extra_infos_dict)
         metric_dict = {}
         for data_source, var2metric2val in data_src2var2metric2val.items():
@@ -2671,6 +2554,43 @@ class RayPPOTrainer:
         global_balance_stats = log_seqlen_unbalance(seqlen_list=global_seqlen_lst, partitions=global_partition_lst, prefix=logging_prefix)
         metrics.update(global_balance_stats)
 
+    def _get_multi_modal_hash(self, multi_modal_data) -> str:
+
+        if multi_modal_data is None:
+            return "none"
+        
+        try:
+            if isinstance(multi_modal_data, dict):
+                hash_parts = []
+                
+                for key in sorted(multi_modal_data.keys()):
+                    value = multi_modal_data[key]
+                    
+                    if isinstance(value, list):
+                        list_hash_parts = []
+                        for item in value:
+                            if hasattr(item, 'mode') and hasattr(item, 'size'):  # PIL图像
+                                img_info = f"img_{item.mode}_{item.size[0]}x{item.size[1]}"
+                                list_hash_parts.append(img_info)
+                            else:
+                                list_hash_parts.append(f"item_{type(item).__name__}")
+                        
+                        hash_parts.append(f"{key}:[{','.join(list_hash_parts)}]")
+                    elif hasattr(value, 'mode') and hasattr(value, 'size'):  # 单个PIL图像
+                        img_info = f"img_{value.mode}_{value.size[0]}x{value.size[1]}"
+                        hash_parts.append(f"{key}:{img_info}")
+                    else:
+                        hash_parts.append(f"{key}:{type(value).__name__}")
+                
+                content = "|".join(hash_parts)
+            else:
+                content = f"{type(multi_modal_data).__name__}"
+            
+            return hashlib.md5(content.encode('utf-8')).hexdigest()[:16]
+            
+        except Exception as e:
+            fallback_content = f"{type(multi_modal_data).__name__}_{id(multi_modal_data) % 1000000}"
+            return hashlib.md5(fallback_content.encode('utf-8')).hexdigest()[:16]
 
     def fit(self):
         """
@@ -2730,20 +2650,18 @@ class RayPPOTrainer:
 
 
                 if "multi_modal_data" in batch.non_tensor_batch:
-                    # [wx] support VLM, we need add six necessary keys
+                    # support VLM, we need add several necessary keys
                     gen_tensor_keys = ["input_ids", "attention_mask", "position_ids"]
                     for key in gen_tensor_keys:
                         if key in batch.batch:
                             batch.batch[f"gen_{key}"] = batch.batch[key]
-                            # print(f"Saved gen_{key} with shape: {batch.batch[key].shape}")
 
                     gen_non_tensor_keys = ["raw_prompt_ids", "tools_kwargs", "multi_modal_data", "multi_modal_inputs"]
                     for key in gen_non_tensor_keys:
                         if key in batch.non_tensor_batch:
                             batch.non_tensor_batch[f"gen_{key}"] = batch.non_tensor_batch[key]
-                            # print(f"Saved gen_{key} with shape: {batch.non_tensor_batch[key].shape}")
 
-                # [wx] pop() means that batch will remove these keys and the poped keys will save as gen_batch
+                # pop() means that batch will remove these keys and the poped keys will save as gen_batch
                 gen_batch = batch.pop(
                     batch_keys=batch_keys_to_pop,
                     non_tensor_batch_keys=non_tensor_batch_keys_to_pop,
@@ -2754,7 +2672,7 @@ class RayPPOTrainer:
 
                 with _timer("step", timing_raw):
 
-                    # [wx] Step 1: Generate batch using current/alpha policy
+                    # Step 1: Generate batch using current/alpha policy
                     with _timer("gen", timing_raw):
                         if self.off_policy_manager.enable_off_policy_rollout:
                             gen_batch_output, is_alpha_sampling = self.off_policy_manager.sample_with_alpha_policy(
@@ -2791,7 +2709,7 @@ class RayPPOTrainer:
 
                     batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
                     
-                    # [wx] union() means combine gen_batch infos and output infos into batch
+                    # union() means combine gen_batch infos and output infos into batch
                     batch = batch.union(gen_batch_output)
 
                     batch.batch["response_mask"] = compute_response_mask(batch)
@@ -2807,7 +2725,7 @@ class RayPPOTrainer:
                     batch.meta_info["global_token_num"] = torch.sum(batch.batch["attention_mask"], dim=-1).tolist()
 
 
-                    # [wx] Step 2: Calculate batch rewards
+                    # Step 2: Calculate batch rewards
                     with _timer("reward", timing_raw):
                         # compute reward model score
                         if self.use_rm:
@@ -2825,9 +2743,9 @@ class RayPPOTrainer:
                         batch.batch["token_level_scores"] = reward_tensor
 
 
-                    # [wx] Step 3: Only collect specifial range data  ([1/8-3/8])
+                    # Step 3: Save all data's rewards into buffer (different from [prompts, responses] key we only choose important data)
+                    # We want to get all historical rewards for tracking the mean score
 
-                    # self.off_policy_manager.collect_data(batch, is_alpha_sampling)
                     scores = batch.batch["token_level_scores"].sum(dim=-1).cpu().numpy()
                     uids = batch.non_tensor_batch["uid"]
 
@@ -2840,13 +2758,11 @@ class RayPPOTrainer:
 
                     # Add group mean score for each uid
                     for uid_str, score_list in uid_to_scores.items():
-                        group_mean_score = np.mean(score_list)
-                        # [wx] buffer have two main parts: the one is the stats buffer (dictlist)
-                        # For each uid (key), the value is the scores from alpha/current policy generation.
-                        # self.off_policy_manager.buffer.add_score(uid_str, group_mean_score, is_alpha_sampling)
-                        self.off_policy_manager.buffer.add_score(uid_str, score_list, is_alpha_sampling) 
+                        # buffer have two main parts: the one is the stats buffer (rewards), the another one is the detailed data (prompts + responses + other keys)
+                        # For each uid (key), the stat is the group scores from alpha/current policy generation.
+                        self.off_policy_manager.buffer.add_score(uid_str, score_list, is_alpha_sampling, target_range=self.off_policy_manager.target_accuracy_range, buffer_range=self.off_policy_manager.buffer_accuracy_range)
 
-                    # [wx] Step 4: Re-evaluate bad cases using current policy
+                    # Step 4: Re-evaluate bad cases using current policy
                     promoted_batch = None
                     if self.off_policy_manager.enable_off_policy_samples and self.off_policy_manager.enable_off_policy_reeval:
                         
@@ -2859,7 +2775,7 @@ class RayPPOTrainer:
                                 
                     # recompute old_log_probs
                     with _timer("old_log_prob", timing_raw):
-                        # [wx] for off policy GRPO, batch is sampled from alpha policy and generate [rollout_log_prob], so we can use it as [old_log_prob]
+                        
                         old_log_prob = self.actor_rollout_wg.compute_log_prob(batch) 
                         entropys = old_log_prob.batch["entropys"]
                         response_masks = batch.batch["response_mask"]
@@ -2869,39 +2785,8 @@ class RayPPOTrainer:
                         metrics.update(old_log_prob_metrics)
                         old_log_prob.batch.pop("entropys")
                         batch = batch.union(old_log_prob)
-                        
-                        if self.config.algorithm.adv_estimator == AdvantageEstimator.GRPO_OFF_POLICY_IS:
-                            rollout_old_log_probs = batch.batch["rollout_log_probs"]
-                            actor_old_log_probs = batch.batch["old_log_probs"]
-                            response_mask = batch.batch["response_mask"]
-                            
-                            
-                            importance_weights = core_algos.compute_importance_weights(
-                                actor_old_log_probs, rollout_old_log_probs, response_mask,
-                                clip_ratio=self.config.algorithm.get("importance_clip_ratio", 10.0),
-                                normalize=self.config.algorithm.get("normalize_importance_weights", True)
-                            )
-                            
-                            # 有效样本大小 (ESS)
-                            ess = (importance_weights.sum() ** 2) / (importance_weights ** 2).sum()
-                            ess_ratio = ess / len(importance_weights)
-                            
-                            # KL散度 (策略间)
-                            kl_div = ((actor_old_log_probs - rollout_old_log_probs) * response_mask).sum(dim=-1).mean()
-                            
-                            is_metrics = {
-                                'importance_sampling/ess_ratio': ess_ratio.item(),
-                                'importance_sampling/weight_variance': importance_weights.var().item(),
-                                'importance_sampling/policy_kl': kl_div.item(),
-                                'importance_sampling/weight_mean': importance_weights.mean().item(),
-                            }
-                            metrics.update(is_metrics)
-                        
-                        # if self.off_policy_manager.enable_off_policy and "rollout_log_probs" in batch.batch.keys():
-                        #     batch.batch["old_log_probs"] = batch.batch["rollout_log_probs"]
-                        
-                        # else:
-                        # TODO: we may want to add diff of probs too.
+
+
                         rollout_old_log_probs = batch.batch["rollout_log_probs"]
                         actor_old_log_probs = batch.batch["old_log_probs"]
                         attention_mask = batch.batch["attention_mask"]
@@ -2923,17 +2808,19 @@ class RayPPOTrainer:
                                 "training/rollout_probs_diff_std": rollout_probs_diff_std.detach().item(),
                             }
                         )
-                        # For delta estimation
-                        # self.off_policy_manager.c_optimizer.update_delta_from_rollout_diff(rollout_probs_diff_mean)
-         
+
                     if self.use_reference_policy:
                         # compute reference log_prob
                         with _timer("ref", timing_raw):
-                            if not self.ref_in_actor:
-                                ref_log_prob = self.ref_policy_wg.compute_ref_log_prob(batch)
+                            if self.off_policy_manager.enable_off_policy_samples:
+                                batch.batch["ref_log_prob"] = batch.batch["old_log_probs"]
+
                             else:
-                                ref_log_prob = self.actor_rollout_wg.compute_ref_log_prob(batch)
-                            batch = batch.union(ref_log_prob)
+                                if not self.ref_in_actor:
+                                    ref_log_prob = self.ref_policy_wg.compute_ref_log_prob(batch)
+                                else:
+                                    ref_log_prob = self.actor_rollout_wg.compute_ref_log_prob(batch)
+                                batch = batch.union(ref_log_prob)
 
                     # compute values
                     if self.use_critic:
@@ -2942,11 +2829,6 @@ class RayPPOTrainer:
                             batch = batch.union(values)
 
                     with _timer("adv", timing_raw):
-                        # # we combine with rule-based rm
-                        # reward_extra_infos_dict: dict[str, list]
-                        # if self.config.reward_model.launch_reward_fn_async:
-                        #     reward_tensor, reward_extra_infos_dict = ray.get(future_reward)
-                        # batch.batch["token_level_scores"] = reward_tensor
 
                         if reward_extra_infos_dict:
                             batch.non_tensor_batch.update({k: np.array(v) for k, v in reward_extra_infos_dict.items()})
@@ -2961,13 +2843,13 @@ class RayPPOTrainer:
                         sequence_reward = batch.batch["token_level_rewards"].sum(-1)
                         metrics.update({"critic/origin_rewards/mean": torch.mean(sequence_reward).detach().item()})
                         
-                            
+                        # Step 5: Add data into off policy buffer (r \in [0, c1] or r \in [c2, c3])
                         self.off_policy_manager.collect_data(batch, is_alpha_sampling)
 
                         # compute advantages, executed on the driver process
                         norm_adv_by_std_in_grpo = self.config.algorithm.get("norm_adv_by_std_in_grpo", True)  # GRPO adv normalization factor
 
-                        # [wx] Step 5: Data filter and merge
+                        # Step 6: Data filter and merge
                         final_batch = batch
                         
                         if self.off_policy_manager.enable_off_policy_samples:
@@ -2976,9 +2858,9 @@ class RayPPOTrainer:
                             combined_uids = set()  
                             batch_sources = []  
 
-                            initial_batch_size = len(batch)  
+                            initial_batch_size = len(batch)
                             
-                            # 5.1. Filter current batch (gaussian/range/uniform)
+                            # 6.1. Filter current fresh samples into train batch (gaussian/range/uniform)
                             current_batch_filtered = self.off_policy_manager.filter_current_batch_samples(batch)
                             
                             if len(current_batch_filtered) > 0:
@@ -2989,7 +2871,7 @@ class RayPPOTrainer:
                                     
                                 print(f"✓ Using {len(current_batch_filtered)} samples from current batch")
 
-                            # 5.2. Calculate how many more samples needed to reach initial_batch_size
+                            # 6.2. Filter buffer samples to reach initial_batch_size
                             if self.off_policy_manager.enable_off_policy_reeval:
                                 current_sample_count = len(current_batch_filtered) if len(current_batch_filtered) > 0 else 0
                                 remaining_needed = initial_batch_size - current_sample_count
@@ -2999,90 +2881,108 @@ class RayPPOTrainer:
                                 if remaining_needed > 0:
                                     buffer_samples_added = 0
                                     
-                                    # 5.2.1. Prioritized sampling from promoted batch
+                                    # 6.2.1. Prioritized sampling from promoted batch
                                     if promoted_batch is not None:
                                         promoted_uids = [str(uid) for uid in promoted_batch.non_tensor_batch["uid"]]
                                         non_duplicate_mask = torch.tensor([uid not in combined_uids for uid in promoted_uids])
                                         
                                         if torch.sum(non_duplicate_mask) > 0:
                                             available_promoted = torch.sum(non_duplicate_mask).item()
-                                            
-                                            
-                                            def make_divisible(size, divisor):
-                                                return (size // divisor) * divisor
-
-               
                                             # When sampling promoted batch
-                                            ppo_micro_batch_size = self.config.actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu
-                                            world_size = self.actor_rollout_wg.world_size
-                                            min_batch_unit = ppo_micro_batch_size * world_size
+                                            is_vlm_model = "multi_modal_inputs" in promoted_batch.non_tensor_batch
+                                            if is_vlm_model:
+                                                def make_divisible(size, divisor):
+                                                    return (size // divisor) * divisor
+                                                ppo_micro_batch_size = self.config.actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu
+                                                world_size = self.actor_rollout_wg.world_size
+                                                min_batch_unit = ppo_micro_batch_size * world_size
 
-                                            promoted_to_take = min(available_promoted, remaining_needed)
-                                            promoted_to_take = make_divisible(promoted_to_take, min_batch_unit)
+                                                promoted_to_take = min(available_promoted, remaining_needed)
+                                                promoted_to_take = make_divisible(promoted_to_take, min_batch_unit)
+                      
+                                                if promoted_to_take > 0:  # Only proceed if we have a valid divisible size
+                                                    if available_promoted > promoted_to_take:
+                                                        valid_indices = torch.where(non_duplicate_mask)[0]
+                                                        perm = torch.randperm(len(valid_indices))
+                                                        selected_indices = valid_indices[perm[:promoted_to_take]]
+                                                        promoted_batch_filtered = promoted_batch.select_idxs(selected_indices)
+                                                        print(f"✓ Randomly sampled {promoted_to_take} from {available_promoted} promoted samples")
+                                                    else:
+                                                        # Need to ensure even the "all available" case is divisible
+                                                        available_divisible = make_divisible(available_promoted, min_batch_unit)
+                                                        if available_divisible > 0:
+                                                            valid_indices = torch.where(non_duplicate_mask)[0]
+                                                            perm = torch.randperm(len(valid_indices))
+                                                            selected_indices = valid_indices[perm[:available_divisible]]
+                                                            promoted_batch_filtered = promoted_batch.select_idxs(selected_indices)
+                                                            print(f"✓ Using {available_divisible} divisible promoted samples from {available_promoted} available")
+                                                        else:
+                                                            promoted_batch_filtered = None
+                                                            print(f"✓ Skipping promoted samples: {available_promoted} samples not divisible by {min_batch_unit}")
+                                                    buffer_samples_added = len(promoted_batch_filtered) 
 
-                                            if promoted_to_take > 0:  # Only proceed if we have a valid divisible size
+                                            else:
+                                                promoted_to_take = min(available_promoted, remaining_needed)
+                                            
                                                 if available_promoted > promoted_to_take:
+                
                                                     valid_indices = torch.where(non_duplicate_mask)[0]
                                                     perm = torch.randperm(len(valid_indices))
                                                     selected_indices = valid_indices[perm[:promoted_to_take]]
                                                     promoted_batch_filtered = promoted_batch.select_idxs(selected_indices)
                                                     print(f"✓ Randomly sampled {promoted_to_take} from {available_promoted} promoted samples")
-                                            else:
-                                                # Need to ensure even the "all available" case is divisible
-                                                available_divisible = make_divisible(available_promoted, min_batch_unit)
-                                                if available_divisible > 0:
-                                                    valid_indices = torch.where(non_duplicate_mask)[0]
-                                                    perm = torch.randperm(len(valid_indices))
-                                                    selected_indices = valid_indices[perm[:available_divisible]]
-                                                    promoted_batch_filtered = promoted_batch.select_idxs(selected_indices)
-                                                    print(f"✓ Using {available_divisible} divisible promoted samples from {available_promoted} available")
                                                 else:
-                                                    promoted_batch_filtered = None
-                                                    print(f"✓ Skipping promoted samples: {available_promoted} samples not divisible by {min_batch_unit}")
-  
-                                            buffer_samples_added = len(promoted_batch_filtered)
-    
-                                            if "old_log_probs" not in promoted_batch_filtered.batch:
-                                                # if "rollout_log_probs" in promoted_batch_filtered.batch.keys():
-                                                #     print("using rollout_log_probs as old_log_probs for promoted batch")
-                                                #     promoted_batch_filtered.batch["old_log_probs"] = promoted_batch_filtered.batch["rollout_log_probs"]
-                                                # else:
-                                                old_log_prob_promoted = self.actor_rollout_wg.compute_log_prob(promoted_batch_filtered)
-                                                old_log_prob_promoted.batch.pop("entropys")
-                                                promoted_batch_filtered = promoted_batch_filtered.union(old_log_prob_promoted)
+                                
+                                                    promoted_batch_filtered = promoted_batch.select_idxs(non_duplicate_mask)
+                                                    print(f"✓ Using all {available_promoted} promoted samples")
+                                            
+                                                buffer_samples_added = len(promoted_batch_filtered)
+                                            
+                                            if buffer_samples_added > 0:
+                                                if "old_log_probs" not in promoted_batch_filtered.batch:
+                                                    old_log_prob_promoted = self.actor_rollout_wg.compute_log_prob(promoted_batch_filtered)
+                                                    old_log_prob_promoted.batch.pop("entropys")
+                                                    promoted_batch_filtered = promoted_batch_filtered.union(old_log_prob_promoted)
+                                                else:
+                                                    print("we reuse the old log probs from the buffer.")
                                                 
-                                            if self.use_reference_policy and "ref_log_prob" not in promoted_batch_filtered.batch:
-                                                if not self.ref_in_actor:
-                                                    ref_log_prob_promoted = self.ref_policy_wg.compute_ref_log_prob(promoted_batch_filtered)
+                                                if self.use_reference_policy and "ref_log_prob" not in promoted_batch_filtered.batch:
+                                                    if self.off_policy_manager.enable_off_policy_samples:
+                                                        promoted_batch_filtered.batch["ref_log_prob"] = promoted_batch_filtered.batch["old_log_probs"]
+                                                    else:
+                                                        if not self.ref_in_actor:
+                                                            ref_log_prob_promoted = self.ref_policy_wg.compute_ref_log_prob(promoted_batch_filtered)
+                                                        else:
+                                                            ref_log_prob_promoted = self.actor_rollout_wg.compute_ref_log_prob(promoted_batch_filtered)
+                                                        promoted_batch_filtered = promoted_batch_filtered.union(ref_log_prob_promoted)
+                                                
+                                                if self.use_critic and "values" not in promoted_batch_filtered.batch:
+                                                    values_promoted = self.critic_wg.compute_values(promoted_batch_filtered)
+                                                    promoted_batch_filtered = promoted_batch_filtered.union(values_promoted)
+                                                
+                                                # Apply rewards
+                                                if self.config.algorithm.use_kl_in_reward:
+                                                    promoted_batch_filtered, _ = apply_kl_penalty(
+                                                        promoted_batch_filtered, 
+                                                        kl_ctrl=self.kl_ctrl_in_reward, 
+                                                        kl_penalty=self.config.algorithm.kl_penalty,
+                                                        off_policy_mode=self.off_policy_manager.enable_off_policy_samples
+                                                    )
                                                 else:
-                                                    ref_log_prob_promoted = self.actor_rollout_wg.compute_ref_log_prob(promoted_batch_filtered)
-                                                promoted_batch_filtered = promoted_batch_filtered.union(ref_log_prob_promoted)
-                                            
-                                            if self.use_critic and "values" not in promoted_batch_filtered.batch:
-                                                values_promoted = self.critic_wg.compute_values(promoted_batch_filtered)
-                                                promoted_batch_filtered = promoted_batch_filtered.union(values_promoted)
-                                            
-                                            # Apply rewards
-                                            if self.config.algorithm.use_kl_in_reward:
-                                                promoted_batch_filtered, _ = apply_kl_penalty(
-                                                    promoted_batch_filtered, 
-                                                    kl_ctrl=self.kl_ctrl_in_reward, 
-                                                    kl_penalty=self.config.algorithm.kl_penalty,
-                                                    off_policy_mode=self.off_policy_manager.enable_off_policy_samples
-                                                )
-                                            else:
-                                                promoted_batch_filtered.batch["token_level_rewards"] = promoted_batch_filtered.batch["token_level_scores"]
+                                                    promoted_batch_filtered.batch["token_level_rewards"] = promoted_batch_filtered.batch["token_level_scores"]
 
-                                            if "response_mask" not in promoted_batch_filtered.batch.keys():
-                                                promoted_batch_filtered.batch["response_mask"] = compute_response_mask(promoted_batch_filtered)
+                                                if "response_mask" not in promoted_batch_filtered.batch.keys():
+                                                    promoted_batch_filtered.batch["response_mask"] = compute_response_mask(promoted_batch_filtered)
 
-                                            batches_to_combine.append(promoted_batch_filtered)
-                                            batch_sources.append("promoted")  
+                                                self.off_policy_manager.collect_data(promoted_batch_filtered, True)
 
-                                            for uid in promoted_batch_filtered.non_tensor_batch["uid"]:
-                                                combined_uids.add(str(uid))
+                                                batches_to_combine.append(promoted_batch_filtered)
+                                                batch_sources.append("promoted")  
+
+                                                for uid in promoted_batch_filtered.non_tensor_batch["uid"]:
+                                                    combined_uids.add(str(uid))
                                     
-                                    # 5.2.2. Compute how many more samples needed to reach initial_batch_size
+                                    # 6.2.2. Sampling high-quality buffer samples to reach initial_batch_size
                                     still_needed = remaining_needed - buffer_samples_added
                                     
                                     if still_needed > 0 and self.off_policy_manager.enable_adaptive_target_range:
@@ -3093,7 +2993,7 @@ class RayPPOTrainer:
                                     if still_needed > 0 and self.off_policy_manager.enable_completion:
                                         print(f"Still need {still_needed} more samples to reach target batch size")
                                         
-                                        # buffer target range (4/8-7/8) 
+                                        # buffer target range [c2, c3]
                                         available_buffer_samples = self.off_policy_manager.get_available_groups_count()
                                         if available_buffer_samples > 0:
                                             
@@ -3121,20 +3021,21 @@ class RayPPOTrainer:
                                                     
 
                                                     if "old_log_probs" not in buffer_batch_filtered.batch:
-                                                        # if "rollout_log_probs" in buffer_batch_filtered.batch.keys():
-                                                        #     print("using rollout_log_probs as old_log_probs for high-quality batch")
-                                                        #     buffer_batch_filtered.batch["old_log_probs"] = buffer_batch_filtered.batch["rollout_log_probs"]
-                                                        # else:
                                                         old_log_prob_buffer = self.actor_rollout_wg.compute_log_prob(buffer_batch_filtered)
                                                         old_log_prob_buffer.batch.pop("entropys")
                                                         buffer_batch_filtered = buffer_batch_filtered.union(old_log_prob_buffer)
-                                                    
+                                                    else:
+                                                        print("we reuse the old log probs from the buffer.")
+
                                                     if self.use_reference_policy and "ref_log_prob" not in buffer_batch_filtered.batch:
-                                                        if not self.ref_in_actor:
-                                                            ref_log_prob_buffer = self.ref_policy_wg.compute_ref_log_prob(buffer_batch_filtered)
+                                                        if self.off_policy_manager.enable_off_policy_samples:
+                                                            buffer_batch_filtered.batch["ref_log_prob"] = buffer_batch_filtered.batch["old_log_probs"]  
                                                         else:
-                                                            ref_log_prob_buffer = self.actor_rollout_wg.compute_ref_log_prob(buffer_batch_filtered)
-                                                        buffer_batch_filtered = buffer_batch_filtered.union(ref_log_prob_buffer)
+                                                            if not self.ref_in_actor:
+                                                                ref_log_prob_buffer = self.ref_policy_wg.compute_ref_log_prob(buffer_batch_filtered)
+                                                            else:
+                                                                ref_log_prob_buffer = self.actor_rollout_wg.compute_ref_log_prob(buffer_batch_filtered)
+                                                            buffer_batch_filtered = buffer_batch_filtered.union(ref_log_prob_buffer)
                                                     
                                                     if self.use_critic and "values" not in buffer_batch_filtered.batch:
                                                         values_buffer = self.critic_wg.compute_values(buffer_batch_filtered)
@@ -3171,7 +3072,7 @@ class RayPPOTrainer:
                                 else:
                                     print(f"✓ Current batch already meets target size")
                                
-                            # 5.3. Combine Batch
+                            # 6.3. Combine Batch
                             if len(batches_to_combine) == 0:
                                 final_batch = batch.select_idxs(torch.tensor([], dtype=torch.long))
                                 final_batch.batch["batch_sources"] = torch.tensor([], dtype=torch.long)
@@ -3204,26 +3105,25 @@ class RayPPOTrainer:
                             final_batch.batch["filtering_mask"] = torch.ones(len(final_batch), dtype=torch.bool)        
                             
 
-                            is_vlm_mode = "multi_modal_inputs" in final_batch.non_tensor_batch
-                            if is_vlm_mode:
-                                ppo_mini_batch_size = self.config.actor_rollout_ref.actor.ppo_mini_batch_size
+                            is_vlm_model = "multi_modal_inputs" in final_batch.non_tensor_batch
+                            if is_vlm_model:
+                                # ppo_mini_batch_size = self.config.actor_rollout_ref.actor.ppo_mini_batch_size
+                                # min_batch_unit = self.config.actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu * self.actor_rollout_wg.world_size
+                                min_batch_unit = self.config.actor_rollout_ref.actor.ppo_mini_batch_size * self.actor_rollout_wg.world_size
                                 current_batch_size = len(final_batch)
                                 
     
-                                target_batch_size = (current_batch_size  // self.config.actor_rollout_ref.rollout.n  // ppo_mini_batch_size) * ppo_mini_batch_size *  self.config.actor_rollout_ref.rollout.n
+                                target_batch_size = (current_batch_size // min_batch_unit) * min_batch_unit
                                 
                                 if target_batch_size != current_batch_size and target_batch_size > 0:
-                                    print(f"VLM mode: Adjusting batch size from {current_batch_size} to {target_batch_size} to be divisible by ppo_mini_batch_size={ppo_mini_batch_size}")
-                                    
-            
+                                    print(f"VLM mode: Adjusting batch size from {current_batch_size} to {target_batch_size} to be divisible by min_batch_unit={min_batch_unit}")
                                     indices = torch.randperm(current_batch_size)[:target_batch_size]
                                     final_batch = final_batch.select_idxs(indices)
                                     
                                 elif target_batch_size == 0:
-                                    print(f"Warning: VLM mode batch size {current_batch_size} < ppo_mini_batch_size {ppo_mini_batch_size}, using original batch")
-                            
+                                    print(f"Warning: VLM mode batch size {current_batch_size} < min_batch_unit {min_batch_unit}, using original batch")
                                 else:
-                                    print(f"VLM mode: Batch size {current_batch_size} is already divisible by ppo_mini_batch_size={ppo_mini_batch_size}")
+                                    print(f"VLM mode: Batch size {current_batch_size} is already divisible by min_batch_unit={min_batch_unit}")
                             
                             final_size = len(final_batch)
          
@@ -3254,24 +3154,30 @@ class RayPPOTrainer:
                             off_policy_stats=off_policy_stats, # with off policy stats and data filter 
                         )
 
-                    if len(final_batch) < self.config.actor_rollout_ref.actor.ppo_mini_batch_size * self.config.actor_rollout_ref.rollout.n:
-                        continue
+                    if "multi_modal_inputs" in final_batch.non_tensor_batch:
+                        # for vlm model, we should make sure the filtered batch size is divisible by ppo_mini_batch_size
+                        # if the batch size is smaller than ppo_mini_batch_size, we choose not train
+                        if len(final_batch) < self.config.actor_rollout_ref.actor.ppo_mini_batch_size * self.config.actor_rollout_ref.rollout.n:
+                            is_train = False
+                        else:
+                            is_train = True
+                    else:
+                        is_train = True
                     # update critic
-                    if self.use_critic:
+                    if is_train and self.use_critic:
                         with _timer("update_critic", timing_raw):
                             critic_output = self.critic_wg.update_critic(batch)
                         critic_output_metrics = reduce_metrics(critic_output.meta_info["metrics"])
                         metrics.update(critic_output_metrics)
 
                     # implement critic warmup
-                    if self.config.trainer.critic_warmup <= self.global_steps:
+                    if is_train and self.config.trainer.critic_warmup <= self.global_steps:
                         # update actor
                         with _timer("update_actor", timing_raw):
                             batch.meta_info["multi_turn"] = self.config.actor_rollout_ref.rollout.multi_turn.enable
                             actor_output = self.actor_rollout_wg.update_actor(batch)
                         actor_output_metrics = reduce_metrics(actor_output.meta_info["metrics"])
                         metrics.update(actor_output_metrics)
-
 
                     # Log rollout generations if enabled
                     rollout_data_dir = self.config.trainer.get("rollout_data_dir", None)
@@ -3331,14 +3237,11 @@ class RayPPOTrainer:
                     return
 
     def _clean_batch_for_training(self, batch: DataProto) -> DataProto:
-        """
-        清理batch，移除训练时不需要的keys，确保所有batch有一致的结构
-        """
-        # 定义训练时需要保留的keys
+
         required_tensor_keys = {
             "input_ids", "attention_mask", "position_ids", "prompts", "responses", 
             "token_level_scores", "token_level_rewards", "old_log_probs", 
-            "response_mask", "rollout_log_probs"
+            "response_mask", "rollout_log_probs", "clip_center",
         }
         
         required_non_tensor_keys = {
@@ -3346,35 +3249,28 @@ class RayPPOTrainer:
             "tools_kwargs", "raw_prompt_ids", "raw_prompt", "multi_modal_inputs"
         }
         
-        # 如果使用reference policy，保留ref相关的keys
         if self.use_reference_policy:
             required_tensor_keys.add("ref_log_prob")
         
-        # 如果使用critic，保留values
         if self.use_critic:
             required_tensor_keys.add("values")
         
-        # 创建新的batch数据
         cleaned_tensor_batch = {}
         cleaned_non_tensor_batch = {}
         
-        # 复制需要的tensor keys
         for key in required_tensor_keys:
             if key in batch.batch:
                 cleaned_tensor_batch[key] = batch.batch[key]
         
-        # 复制需要的non_tensor keys
         for key in required_non_tensor_keys:
             if key in batch.non_tensor_batch:
                 cleaned_non_tensor_batch[key] = batch.non_tensor_batch[key]
         
-        # 创建清理后的DataProto
         cleaned_batch = DataProto.from_dict(
             tensors=cleaned_tensor_batch,
             non_tensors=cleaned_non_tensor_batch
         )
         
-        # 保留重要的meta_info
         if hasattr(batch, 'meta_info'):
             cleaned_batch.meta_info = batch.meta_info.copy()
         

@@ -861,7 +861,7 @@ trainer:
   prompt_tracking:
 
     enable: True
-    save_dir: "./prompt_tracking_results" 
+    save_dir: "./${trainer.project_name}/${trainer.experiment_name}/prompt_tracking_results" 
     track_top_k_improved: 50
     track_top_k_degraded: 20
 

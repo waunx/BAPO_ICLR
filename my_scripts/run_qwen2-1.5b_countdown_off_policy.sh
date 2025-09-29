@@ -18,13 +18,13 @@ python3 -m verl.trainer.main_ppo \
     algorithm.enable_off_policy_reeval=True \
     algorithm.enable_off_policy_rollout=True \
     algorithm.enable_completion_batch=True \
-    algorithm.enable_adaptive_target_range=True \
+    algorithm.enable_adaptive_target_range=False \
     algorithm.train_batch_filter=gaussian \
     algorithm.fix_max_size=True \
     algorithm.off_policy_update_freq=5 \
     algorithm.off_policy_reeval_freq=5 \
-    algorithm.max_total_uids=256 \
-    algorithm.max_reeval_ids=128 \
+    algorithm.max_total_uids=1024 \
+    algorithm.max_reeval_ids=256 \
     custom_reward_function.path="$REWARD_PATH" \
     data.train_files="$TRAIN_DATA_PATH" \
     data.val_files="$VAL_DATA_PATH" \
@@ -34,7 +34,7 @@ python3 -m verl.trainer.main_ppo \
     data.max_response_length=2048 \
     data.filter_overlong_prompts=True \
     data.truncation='error' \
-    actor_rollout_ref.actor.lambda_1=1 \
+    actor_rollout_ref.actor.lambda_1=3 \
     actor_rollout_ref.actor.lambda_2=1 \
     actor_rollout_ref.model.path=$MODEL_PATH \
     actor_rollout_ref.actor.optim.lr=1e-6 \
@@ -60,8 +60,8 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','swanlab'] \
     trainer.project_name='off_policy_grpo_debug' \
-    trainer.experiment_name='off_sample_off_rollout-qwen2_1.5b-countdown-freq-5-5-off_kl-train' \
-    trainer.prompt_tracking.save_dir='/data/wx_data/logs/BAPO/CountDown/off_sample_off_rollout-qwen2_1.5b-countdown-freq-5-5-off_kl-train-tracking_results' \
+    trainer.experiment_name='off_sample_off_rollout-qwen2_1.5b-countdown-freq-5-5-B1k-fix_X3-train' \
+    trainer.prompt_tracking.save_dir='/data/wx_data/logs/BAPO/CountDown/off_sample_off_rollout-qwen2_1.5b-countdown-freq-5-5-B1k-fix_X3-train-tracking_results' \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.save_freq=1000 \

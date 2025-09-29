@@ -1,0 +1,80 @@
+{
+  "last_updated_step": 471,
+  "total_prompts": 1000,
+  "improvement_rate": 0.657,
+  "degradation_rate": 0.057,
+  "top_5_improved": [
+    {
+      "prompt_hash": "8c71d02a3888e04d",
+      "content": "<｜User｜>In triangle \\( \\triangle ABC \\), the sides opposite to the angles \\( \\angle A \\), \\( \\angle ...",
+      "baseline_acc": -1.0,
+      "current_acc": 1.0,
+      "improvement": 2.0
+    },
+    {
+      "prompt_hash": "b589c52dd730ef96",
+      "content": "<｜User｜>Find the largest positive integer  $n$  such that for each prime  $p$  with  $2<p<n$  the di...",
+      "baseline_acc": -1.0,
+      "current_acc": 1.0,
+      "improvement": 2.0
+    },
+    {
+      "prompt_hash": "5f86a90883093caf",
+      "content": "<｜User｜>Mrs. Johnson recorded the following scores for a test taken by her 120 students. Calculate t...",
+      "baseline_acc": -1.0,
+      "current_acc": 1.0,
+      "improvement": 2.0
+    },
+    {
+      "prompt_hash": "651bb3703be8dbf1",
+      "content": "<｜User｜>Three distinct real numbers form (in some order) a 3-term arithmetic sequence, and also form...",
+      "baseline_acc": -1.0,
+      "current_acc": 1.0,
+      "improvement": 2.0
+    },
+    {
+      "prompt_hash": "62665a5a0aa3bd2a",
+      "content": "<｜User｜>Given two points A (-2, 0), B (0, 2), and point C is any point on the circle $x^2+y^2-2x=0$,...",
+      "baseline_acc": -1.0,
+      "current_acc": 1.0,
+      "improvement": 2.0
+    }
+  ],
+  "top_5_degraded": [
+    {
+      "prompt_hash": "0565ed44eab6fc45",
+      "content": "<｜User｜>Let $a, b$ and $c$ be positive real numbers such that $$\\begin{aligned} a^{2}+a b+b^{2} & =9...",
+      "baseline_acc": 0.4619140625,
+      "current_acc": -0.98779296875,
+      "degradation": 1.44970703125
+    },
+    {
+      "prompt_hash": "716ee5b2932becbe",
+      "content": "<｜User｜>It is known that the 3 sides of a triangle are consecutive positive integers and the largest...",
+      "baseline_acc": 1.0,
+      "current_acc": -0.297607421875,
+      "degradation": 1.297607421875
+    },
+    {
+      "prompt_hash": "e3bba2027af1211c",
+      "content": "<｜User｜>Let $x = \\cos \\frac{2 \\pi}{7} + i \\sin \\frac{2 \\pi}{7}.$  Compute the value of\n\\[(2x + x^2)(...",
+      "baseline_acc": 0.953857421875,
+      "current_acc": -0.30419921875,
+      "degradation": 1.258056640625
+    },
+    {
+      "prompt_hash": "9a79d757081e947d",
+      "content": "<｜User｜>Solve for $y$: $50^4 = 10^y$ Let's think step by step and output the final answer within \\bo...",
+      "baseline_acc": 1.0,
+      "current_acc": 0.0,
+      "degradation": 1.0
+    },
+    {
+      "prompt_hash": "6a2fb68f6b85fb0f",
+      "content": "<｜User｜>A cube with side length  $2$  is inscribed in a sphere. A second cube, with faces parallel t...",
+      "baseline_acc": 1.0,
+      "current_acc": 0.0,
+      "degradation": 1.0
+    }
+  ]
+}

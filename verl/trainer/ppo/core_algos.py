@@ -618,6 +618,7 @@ def agg_loss(loss_mat: torch.Tensor, loss_mask: torch.Tensor, loss_agg_mode: str
 def compute_policy_loss(
     old_log_prob,
     log_prob,
+    clip_center,
     advantages,
     response_mask,
     cliprange=None,
@@ -665,7 +666,7 @@ def compute_policy_loss(
         cliprange_low = cliprange
     if cliprange_high is None:
         cliprange_high = cliprange
-    pg_losses2 = -advantages * torch.clamp(ratio, 1 - cliprange_low, 1 + cliprange_high)  # - clip(ratio, 1-cliprange, 1+cliprange) * A
+    pg_losses2 = -advantages * torch.clamp(ratio, clip_center - cliprange_low, clip_center + cliprange_high)  # - clip(ratio, 1-cliprange, 1+cliprange) * A
     clip_pg_losses1 = torch.maximum(pg_losses1, pg_losses2)  # max(-ratio * A, -clip(ratio, 1-cliprange, 1+cliprange) * A)
     pg_clipfrac = verl_F.masked_mean(torch.gt(pg_losses2, pg_losses1).float(), response_mask)
 
