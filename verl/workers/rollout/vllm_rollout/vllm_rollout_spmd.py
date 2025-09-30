@@ -273,6 +273,7 @@ class vLLMRollout(BaseRollout):
                 "top_k": self.config.val_kwargs.top_k,
                 "top_p": self.config.val_kwargs.top_p,
                 "n": 1, 
+                "max_tokens": 32768,
             }
         elif is_re_rollout:
             # [wx] For re-evaluate 
@@ -310,8 +311,9 @@ class vLLMRollout(BaseRollout):
                         curr_log_prob.append(logprob[response_ids[i]].logprob)
                     rollout_log_probs.append(curr_log_prob)
 
-            response = pad_2d_list_to_length(response, self.pad_token_id, max_length=self.config.response_length).to(idx.device)
-            rollout_log_probs = pad_2d_list_to_length(rollout_log_probs, -1, max_length=self.config.response_length).to(idx.device)
+            response = pad_2d_list_to_length(response, self.pad_token_id, max_length=self.sampling_params.max_tokens).to(idx.device)
+            # rollout_log_probs = pad_2d_list_to_length(rollout_log_probs, -1, max_length=self.config.response_length).to(idx.device)
+            rollout_log_probs = pad_2d_list_to_length(rollout_log_probs, -1, max_length=self.sampling_params.max_tokens).to(idx.device)
             rollout_log_probs = rollout_log_probs.to(torch.float32)
 
             # if self.sampling_params.n > 1 and do_sample:

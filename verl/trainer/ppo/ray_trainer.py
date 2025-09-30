@@ -2170,7 +2170,8 @@ class RayPPOTrainer:
             test_batch = DataProto.from_single_dict(test_data)
 
             # repeat test batch (avg@32)
-            test_input_batch = test_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n * 4, interleave=True)
+            test_input_batch = test_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
+            test_batch = test_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
 
             # we only do validation on rule-based rm
             if self.config.reward_model.enable and test_batch[0].non_tensor_batch["reward_model"]["style"] == "model":
@@ -2242,7 +2243,6 @@ class RayPPOTrainer:
             output_ids = test_output_gen_batch.batch["responses"]
             output_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in output_ids]
             sample_outputs.extend(output_texts)
-
 
             test_batch = test_input_batch.union(test_output_gen_batch)
 

@@ -752,17 +752,16 @@ algorithm:
   enable_off_policy_reeval: false
 
   enable_completion_batch: true
+
   enable_multi_level_downsampling: false
 
   enable_adaptive_target_range: false
 
-  importance_clip_ratio: 10.0         
+  importance_clip_ratio: 10.0  
+
   normalize_importance_weights: true   
 
-
-  # Method for current batch filter: "gaussian", "range", or "uniform"
   train_batch_filter: gaussian
-
 
   fix_max_size: true
   
@@ -777,6 +776,17 @@ algorithm:
   max_samples_per_uid: 8
 
   max_reeval_ids: 256
+
+  high_thr_c2_max: 0.375
+
+  high_thr_c3_max: 0.75
+
+  high_thr_c2_min: 0.125
+
+  high_thr_c3_min: 0.375
+
+  bad_thr_c1: 0.125
+
 
 
 # config for the trainer
