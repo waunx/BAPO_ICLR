@@ -273,7 +273,7 @@ class vLLMRollout(BaseRollout):
                 "top_k": self.config.val_kwargs.top_k,
                 "top_p": self.config.val_kwargs.top_p,
                 "n": 1, 
-                "max_tokens": 32768,
+                "max_tokens": 4096,
             }
         elif is_re_rollout:
             # [wx] For re-evaluate 

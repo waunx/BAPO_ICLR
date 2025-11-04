@@ -1,0 +1,30 @@
+{
+  "last_updated_step": 50,
+  "total_prompts": 30,
+  "improvement_rate": 0.1,
+  "degradation_rate": 0.0,
+  "top_5_improved": [
+    {
+      "prompt_hash": "2cade69b3eb8d132",
+      "content": "user\nLet $A$, $B$, $C$, and $D$ be point on the hyperbola $\\frac{x^2}{20}- \\frac{y^2}{24} = 1$ such ...",
+      "baseline_acc": 0.0,
+      "current_acc": 1.0,
+      "improvement": 1.0
+    },
+    {
+      "prompt_hash": "1803f7082a87d571",
+      "content": "user\nLet $ABCD$ be a tetrahedron such that $AB=CD= \\sqrt{41}$, $AC=BD= \\sqrt{80}$, and $BC=AD= \\sqrt...",
+      "baseline_acc": 0.0,
+      "current_acc": 1.0,
+      "improvement": 1.0
+    },
+    {
+      "prompt_hash": "d70841b9d78a9622",
+      "content": "user\nA list of positive integers has the following properties:\n$\\bullet$ The sum of the items in the...",
+      "baseline_acc": 0.0,
+      "current_acc": 1.0,
+      "improvement": 1.0
+    }
+  ],
+  "top_5_degraded": []
+}

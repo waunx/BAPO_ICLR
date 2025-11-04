@@ -173,7 +173,8 @@ class OffPolicyGroupBuffer:
         if buffer_range is None:
             buffer_range = (0/8, 1/8)
         
-        max_per_category = self.max_total_uids // 2
+        max_high = self.max_total_uids // 4
+        max_bad = self.max_total_uids - max_high
         
         # Categorize UIDs 
         target_only_uids = []
@@ -207,16 +208,16 @@ class OffPolicyGroupBuffer:
         uids_to_remove = []
         
         # 1. High-quality samples limit
-        if len(target_uids) > max_per_category:
-            excess_target = len(target_uids) - max_per_category
+        if len(target_uids) > max_high:
+            excess_target = len(target_uids) - max_high
             # Remove oldest UIDs first
             target_to_remove = [uid for uid in self.uid_order if uid in target_uids][:excess_target]
             uids_to_remove.extend(target_to_remove)
             target_uids = [uid for uid in target_uids if uid not in target_to_remove]
         
         # 2. Difficult samples limit
-        if len(buffer_uids) > max_per_category:
-            excess_buffer = len(buffer_uids) - max_per_category
+        if len(buffer_uids) > max_bad:
+            excess_buffer = len(buffer_uids) - max_bad
             # Remove oldest UIDs first
             buffer_to_remove = [uid for uid in self.uid_order if uid in buffer_uids][:excess_buffer]
             uids_to_remove.extend(buffer_to_remove)
@@ -383,7 +384,7 @@ class OffPolicyManager:
         self.score_candidates = [i/8 for i in range(9)]  # [0/8, 1/8, 2/8, ..., 7/8, 8/8]
 
         self.train_accuracy_range = (1/8, 7/8) # DAPO only
-        self.target_accuracy_range = (self.high_thr_c2_min, self.high_thr_c3_max)  # high-quality samples acc thr
+        self.target_accuracy_range = (self.high_thr_c2_min, self.high_thr_c3_min)  # high-quality samples acc thr
         self.buffer_accuracy_range = (0/8, self.bad_thr_c1)  # difficult samples acc thr
         self.promotion_threshold = (self.bad_thr_c1, 1)  # prompoted difficult samples acc thr
         
