@@ -1,0 +1,47 @@
+hydra:
+  searchpath:
+    - file://verl/trainer/config
+
+defaults:
+  - ppo_trainer
+  - _self_
+
+data:
+  gen_batch_size: ${data.train_batch_size}
+
+reward_model:
+  reward_manager: dapo
+  overlong_buffer:
+    enable: false
+    len: 0
+    penalty_factor: 0.0
+    log: false
+
+# BAPO-specific: off-policy, filter_groups, rollout importance sampling
+algorithm:
+  filter_groups:
+    enable: true
+    metric: seq_final_reward
+    max_num_gen_batches: 1
+  enable_off_policy_samples: true
+  enable_off_policy_rollout: true
+  enable_off_policy_reeval: true
+  enable_completion_batch: true
+  enable_adaptive_target_range: false
+  train_batch_filter: range
+  fix_max_size: true
+  off_policy_update_freq: 2
+  off_policy_reeval_freq: 2
+  max_total_uids: 128
+  max_reeval_ids: 32
+  rollout_is_threshold: 3
+  rollout_is_level: token
+  rollout_is_mode: truncate
+  rollout_is: true
+  importance_clip_ratio: 10.0
+  normalize_importance_weights: true
+
+trainer:
+  project_name: BAPO
+  prompt_tracking:
+    enable: true
