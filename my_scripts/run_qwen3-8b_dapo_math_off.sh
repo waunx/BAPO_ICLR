@@ -15,10 +15,10 @@ max_num_gen_batches=1
 loss_agg_mode="token-mean"
 
 
-MODEL_PATH=/data/wx_data/models/Qwen3-8B
+MODEL_PATH=your_model_path/Qwen3-8B
 
-TRAIN_DATA_PATH=/data/wx_data/datasets/BAPO/DeepScaleR/deepscaler_train.parquet
-VAL_DATA_PATH=/data/wx_data/datasets/DeepScaleR/aime.parquet
+TRAIN_DATA_PATH=your_dataset_path/deepscaler_train.parquet
+VAL_DATA_PATH=your_dataset_path/aime.parquet 
 
 
 # Algorithm
