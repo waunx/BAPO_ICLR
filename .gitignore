@@ -5,6 +5,7 @@
 **/_build/
 **/*.ckpt
 **/outputs
+BAPO/
 **/*.tar.gz
 **/playground
 **/wandb
